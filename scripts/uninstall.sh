@@ -2,28 +2,31 @@
 # Remove o Wavegen do computador.
 #
 #   ./scripts/uninstall.sh          pergunta antes de cada etapa
-#   ./scripts/uninstall.sh --all    remove tudo, inclusive a pasta do projeto (pede 1 confirmação)
+#   ./scripts/uninstall.sh --all    remove tudo (pede uma única confirmação)
 #   ./scripts/uninstall.sh --yes    igual a --all, sem perguntar
 #
-# O que é removido:
+# O que pode ser removido:
 #   1. atalho do menu e ícone        ~/.local/share/applications/wavegen.desktop
 #                                    ~/.local/share/icons/hicolor/scalable/apps/wavegen.svg
-#   2. cache (trilhas e análises)    ~/.cache/wavegen
-#   3. preferências                  ~/.config/wavegen
-#   4. a pasta do projeto            (código, .venv e projetos salvos dentro dela)
+#   2. o app instalado               ~/.config/wavegen/app (código + ambiente Python)
+#   3. cache (trilhas e análises)    ~/.cache/wavegen
+#   4. preferências                  ~/.config/wavegen/settings.json
+#   5. a pasta do código-fonte       de onde o app foi instalado (ex.: ~/Projects/resolve-waveforms)
 #
-# Nunca são removidos: os vídeos que você exportou (ficam na pasta que você escolheu),
-# projetos .wavegen.json salvos fora da pasta do projeto e os pacotes do sistema
-# (ffmpeg, uv, portaudio).
+# Nunca são removidos: os vídeos que você exportou, projetos .wavegen.json salvos fora das
+# pastas acima e os pacotes do sistema (ffmpeg, uv, portaudio).
 
 set -euo pipefail
 
+# Tudo fica dentro de main(): o bash lê o script enquanto executa, e este script pode apagar
+# a própria pasta. Com main(), o arquivo inteiro já foi lido antes de qualquer remoção.
 main() {
-    local proj data cache config mode="ask"
-    proj="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+    local here config app data cache mode="ask"
+    here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+    config="${XDG_CONFIG_HOME:-$HOME/.config}/wavegen"
+    app="$config/app"
     data="${XDG_DATA_HOME:-$HOME/.local/share}"
     cache="${XDG_CACHE_HOME:-$HOME/.cache}/wavegen"
-    config="${XDG_CONFIG_HOME:-$HOME/.config}/wavegen"
 
     case "${1:-}" in
         --all) mode="all" ;;
@@ -33,53 +36,62 @@ main() {
         *) echo "Opção desconhecida: $1 (use --help)" >&2; return 2 ;;
     esac
 
-    # Segurança: só apaga a pasta se ela for mesmo o projeto do Wavegen.
-    if [[ ! -f "$proj/pyproject.toml" ]] || ! grep -q '^name = "wavegen"' "$proj/pyproject.toml"; then
-        echo "Erro: $proj não parece ser a pasta do Wavegen. Nada foi removido." >&2
-        return 1
-    fi
-    if [[ "$proj" == "/" || "$proj" == "$HOME" ]]; then
-        echo "Erro: pasta do projeto inválida ($proj). Nada foi removido." >&2
-        return 1
-    fi
+    is_wavegen() { [[ -f "$1/pyproject.toml" ]] && grep -q '^name = "wavegen"' "$1/pyproject.toml"; }
 
-    if pgrep -f "$proj/.venv/bin/" >/dev/null 2>&1 || pgrep -f "wavegen.job" >/dev/null 2>&1; then
+    # código-fonte: esta pasta (se não for o app instalado) ou a registrada na instalação
+    local src="" cand
+    if [[ "$here" != "$app" ]] && is_wavegen "$here"; then
+        src="$here"
+    elif [[ -f "$app/.instalado-de" ]]; then
+        cand="$(cat "$app/.instalado-de")"
+        if is_wavegen "$cand"; then src="$cand"; fi
+    fi
+    local d
+    for d in "$src" "$app"; do
+        if [[ -n "$d" && ( "$d" == "/" || "$d" == "$HOME" || "$d" == "$config" ) ]]; then
+            echo "Erro: pasta inválida ($d). Nada foi removido." >&2
+            return 1
+        fi
+    done
+
+    if pgrep -f "$app/.venv/bin/" >/dev/null 2>&1 || pgrep -f "wavegen.job" >/dev/null 2>&1 \
+       || { [[ -n "$src" ]] && pgrep -f "$src/.venv/bin/" >/dev/null 2>&1; }; then
         echo "O Wavegen parece estar aberto (ou renderizando). Feche-o antes de desinstalar." >&2
         return 1
     fi
 
-    size() { [[ -e "$1" ]] && du -sh "$1" 2>/dev/null | cut -f1 || echo "—"; }
+    size() { [[ -e "$1" ]] && du -sh "$1" 2>/dev/null | cut -f1 || echo "não existe"; }
 
     echo "Wavegen — desinstalação"
     echo
     echo "  1. Atalho e ícone do menu"
-    echo "  2. Cache            $cache ($(size "$cache"))"
-    echo "  3. Preferências     $config ($(size "$config"))"
-    echo "  4. Pasta do projeto $proj ($(size "$proj"))"
-    local saved
-    saved=$(find "$proj" -name '*.wavegen.json' -not -path '*/.venv/*' 2>/dev/null | wc -l)
-    if (( saved > 0 )); then
-        echo "     atenção: contém $saved projeto(s) .wavegen.json salvo(s)"
+    echo "  2. App instalado     $app ($(size "$app"))"
+    echo "  3. Cache             $cache ($(size "$cache"))"
+    echo "  4. Preferências      $config/settings.json"
+    if [[ -n "$src" ]]; then
+        echo "  5. Código-fonte      $src ($(size "$src"))"
+        local saved
+        saved=$(find "$src" -name '*.wavegen.json' -not -path '*/.venv/*' 2>/dev/null | wc -l)
+        if (( saved > 0 )); then
+            echo "     atenção: contém $saved projeto(s) .wavegen.json salvo(s)"
+        fi
     fi
     echo
     echo "Os vídeos exportados e os pacotes do sistema não serão removidos."
     echo
 
+    if [[ "$mode" == "all" ]]; then
+        local r
+        read -r -p "Remover TUDO acima? [s/N] " r
+        [[ "$r" =~ ^[sSyY]$ ]] || { echo "Cancelado. Nada foi removido."; return 0; }
+    fi
+
     confirm() {   # confirm "pergunta" -> 0 = sim
-        case "$mode" in
-            yes) return 0 ;;
-            all) return 0 ;;
-        esac
+        [[ "$mode" != "ask" ]] && return 0
         local r
         read -r -p "$1 [s/N] " r
         [[ "$r" =~ ^[sSyY]$ ]]
     }
-
-    if [[ "$mode" == "all" ]]; then
-        local r
-        read -r -p "Remover TUDO acima, inclusive a pasta do projeto? [s/N] " r
-        [[ "$r" =~ ^[sSyY]$ ]] || { echo "Cancelado. Nada foi removido."; return 0; }
-    fi
 
     local removed=()
 
@@ -90,25 +102,31 @@ main() {
         removed+=("atalho e ícone")
     fi
 
-    if confirm "2. Apagar o cache ($(size "$cache"))?"; then
+    if [[ -e "$app" ]] && confirm "2. Remover o app instalado ($(size "$app"))?"; then
+        if is_wavegen "$app"; then
+            cd /
+            rm -rf -- "$app"
+            removed+=("app instalado")
+        else
+            echo "   $app não parece ser o Wavegen; mantido."
+        fi
+    fi
+
+    if [[ -e "$cache" ]] && confirm "3. Apagar o cache ($(size "$cache"))?"; then
         rm -rf -- "$cache"
         removed+=("cache")
     fi
 
-    if confirm "3. Apagar as preferências?"; then
-        rm -rf -- "$config"
+    if [[ -e "$config/settings.json" ]] && confirm "4. Apagar as preferências?"; then
+        rm -f -- "$config/settings.json" "$config/settings.json.tmp"
         removed+=("preferências")
     fi
+    rmdir "$config" 2>/dev/null || true          # só some se tiver ficado vazia
 
-    local del_proj=0
-    if confirm "4. Apagar a pasta do projeto inteira ($proj)?"; then
-        del_proj=1
-    fi
-
-    if (( del_proj )); then
-        cd /                    # sair da pasta antes de apagá-la
-        rm -rf -- "$proj"
-        removed+=("pasta do projeto")
+    if [[ -n "$src" && -e "$src" ]] && confirm "5. Apagar a pasta do código-fonte ($src)?"; then
+        cd /
+        rm -rf -- "$src"
+        removed+=("código-fonte")
     fi
 
     echo

@@ -1,172 +1,223 @@
 # Wavegen — vídeos musicais com waveform animado
 
 Aplicativo para Linux que junta **uma imagem ou um vídeo + uma ou mais músicas** e gera um
-**vídeo completo com visualizador de áudio** (waveform/espectro) sincronizado, pronto para o
-YouTube (MP4 · H.264 · AAC). Também exporta o visualizador **com fundo transparente**
-(ProRes 4444 / PNG em .mov) para usar como sobreposição no DaVinci Resolve Free ou Studio.
+**vídeo completo com visualizador de áudio** sincronizado, pronto para o YouTube
+(MP4 · H.264 · AAC). Também exporta só o visualizador, **com fundo transparente**, para usar
+como sobreposição no DaVinci Resolve (Free ou Studio).
+
+![Janela principal do Wavegen](docs/images/01-janela-principal.png)
+
+## Funções
+
+- **Fundo com imagem ou vídeo**: preencher a tela, imagem inteira, recorte, zoom, escurecer.
+  Vídeos podem repetir **em loop até a última música terminar**.
+- **Playlist**: várias músicas, reordenar, crossfade, intervalo, fades, volume geral.
+- **11 estilos de visualizador**, todos personalizáveis (cores, gradiente, tamanho, brilho…),
+  com posição e tamanho ajustáveis arrastando na pré-visualização.
+- **Vinil com capa**: capa personalizada, disco girando e **nome da faixa com contador**.
+- **Pré-visualização com som**, sincronizada com a animação.
+- **Lista de faixas com os tempos** pronta para a descrição do YouTube (capítulos).
+- **Exportação** em 720p, 1080p, 4K, vertical ou quadrado; CPU ou GPU AMD (VAAPI);
+  progresso, tempo restante e cancelamento, sem travar a janela.
+- **Projetos salvos** (`.wavegen.json`) para continuar depois.
+
+| Vinil com capa, nome da faixa e contador | Vídeo como fundo, em loop |
+|---|---|
+| ![Vinil com capa](docs/images/02-vinil-nome-contador.png) | ![Fundo em vídeo](docs/images/03-fundo-video-loop.png) |
+| **Exportação** | **Lista de faixas para o YouTube** |
+| ![Exportar](docs/images/04-exportar.png) | ![Lista de faixas](docs/images/05-lista-de-faixas.png) |
+
+Os 11 estilos (imagens geradas pelo próprio app):
+
+![Todos os estilos](docs/images/06-estilos.png)
 
 ## Instalação
 
-Dependências do sistema (Arch/CachyOS):
+### 1. Dependências do sistema (Arch/CachyOS)
 
 ```bash
 sudo pacman -S --needed ffmpeg uv portaudio
 ```
 
-- `ffmpeg`: obrigatório (lê os áudios, monta a trilha e codifica o vídeo).
+- `ffmpeg`: obrigatório (lê os áudios e vídeos, monta a trilha e codifica o vídeo).
 - `uv`: cria o ambiente Python com as bibliotecas (PySide6-Essentials, numpy, sounddevice).
 - `portaudio`: som da pré-visualização. Sem ele o app funciona, mas o preview fica mudo.
 - Opcional, para usar a GPU AMD: `libva-mesa-driver` (VAAPI). Confira com `vainfo`.
 
-### Passo a passo
+### 2. Instalar o app
 
-1. Instale as dependências do sistema (comando acima).
-2. Entre na pasta do projeto:
-   ```bash
-   cd ~/Projects/resolve-waveforms
-   ```
-3. Crie o atalho no menu (o script também roda `uv sync`, que instala as bibliotecas
-   Python em `.venv`):
-   ```bash
-   ./scripts/install-desktop.sh
-   ```
-4. Abra **Wavegen** no menu de aplicativos. Se o ícone não aparecer logo, saia e entre de
-   novo na sessão.
+```bash
+cd ~/Projects/resolve-waveforms      # a pasta onde está o código (baixado ou clonado)
+./scripts/install.sh
+```
 
-Para atualizar, veja a seção [Atualização](#atualização).
+O script:
+
+1. copia o app para **`~/.config/wavegen/app`**;
+2. cria o ambiente Python lá dentro (`~/.config/wavegen/app/.venv`);
+3. cria o atalho **Wavegen** no menu de aplicativos, com o ícone.
+
+Depois de instalado, o app não depende mais da pasta do código: ela pode ser movida ou
+apagada.
+
+### 3. Abrir
+
+Procure **Wavegen** no menu de aplicativos. Se o ícone não aparecer logo, saia e entre de
+novo na sessão.
+
+Opções do script:
+
+| Comando | O que faz |
+|---|---|
+| `./scripts/install.sh` | instala ou atualiza em `~/.config/wavegen/app` (padrão) |
+| `./scripts/install.sh --dest PASTA` | instala em outra pasta |
+| `./scripts/install.sh --here` | usa a própria pasta do código, sem copiar (para quem mexe no código) |
+| `./scripts/install.sh --remove` | remove só o atalho do menu |
 
 ## Atualização
 
-O app roda direto da pasta do projeto, então atualizar é trocar os arquivos dessa pasta e
-rodar o script de instalação de novo. Seus projetos `.wavegen.json` e preferências continuam
-valendo.
-
-### Passo a passo
+Seus projetos `.wavegen.json`, preferências e cache continuam valendo.
 
 1. **Feche o Wavegen** e espere terminar qualquer renderização.
-2. (Recomendado) Faça uma cópia de segurança dos projetos salvos dentro da pasta do app, se
-   houver:
-   ```bash
-   cd ~/Projects/resolve-waveforms
-   find . -name '*.wavegen.json' -not -path './.venv/*'
-   ```
-3. **Traga a versão nova** para a pasta, de um destes jeitos:
-   - Alterações feitas direto na pasta (por exemplo, pelo assistente): os arquivos já estão
-     no lugar. Siga para o passo 4.
-   - Pelo GitHub, quando o projeto estiver lá:
+2. **Traga a versão nova do código**, de um destes jeitos:
+   - pelo GitHub:
      ```bash
      cd ~/Projects/resolve-waveforms
      git pull
      ```
-   - Por um arquivo .zip: extraia por cima da pasta, mantendo `.venv` (se quiser, apague a
-     pasta `src/` antes, para não sobrar arquivo antigo).
-4. **Atualize as bibliotecas e o atalho** (instala as dependências novas e reaplica o ícone):
+   - por um arquivo .zip: extraia numa pasta qualquer;
+   - mudanças feitas direto na pasta do código: já estão no lugar.
+3. **Rode o instalador de novo** a partir da pasta do código novo:
    ```bash
    cd ~/Projects/resolve-waveforms
-   ./scripts/install-desktop.sh
+   ./scripts/install.sh
    ```
-5. (Opcional) Confira se está tudo certo:
-   ```bash
-   uv run python -m unittest discover -s tests
-   ```
-   O final deve mostrar `OK`.
-6. Abra o **Wavegen** pelo menu. A versão aparece em **Ajuda → Sobre**.
+   Ele substitui os arquivos do app em `~/.config/wavegen/app`, instala bibliotecas novas se
+   houver, e reaplica o atalho e o ícone.
+4. Abra o **Wavegen** pelo menu. A versão aparece em **Ajuda → Sobre**.
 
 ### Dúvidas comuns
 
-- **Preciso apagar o cache?** Não. As trilhas e análises em cache são refeitas sozinhas
-  quando o formato muda. Se algo parecer estranho, use **Ajuda → Limpar cache de áudio**.
+- **Preciso apagar o cache?** Não. Ele se refaz sozinho quando muda. Se algo parecer estranho,
+  use **Ajuda → Limpar cache de áudio**.
 - **O ícone do menu não mudou:** saia e entre de novo na sessão.
-- **Deu erro de biblioteca ao abrir:** apague o ambiente Python e recrie:
+- **Deu erro de biblioteca ao abrir:** apague o ambiente Python do app e instale de novo:
   ```bash
-  cd ~/Projects/resolve-waveforms
-  rm -rf .venv
-  ./scripts/install-desktop.sh
+  rm -rf ~/.config/wavegen/app/.venv
+  cd ~/Projects/resolve-waveforms && ./scripts/install.sh
   ```
-- **Quero recomeçar do zero:** rode `./scripts/uninstall.sh` (veja a seção Desinstalação) e
-  instale de novo.
+- **Quero recomeçar do zero:** rode `./scripts/uninstall.sh` (veja abaixo) e instale de novo.
 
 ## Desinstalação
 
 Use o script, que pergunta antes de cada etapa:
 
 ```bash
-cd ~/Projects/resolve-waveforms
-./scripts/uninstall.sh
+~/.config/wavegen/app/scripts/uninstall.sh
 ```
+
+(ou `./scripts/uninstall.sh` de dentro da pasta do código; funciona igual)
 
 Ele oferece remover, um de cada vez:
 
 1. o atalho e o ícone do menu;
-2. o cache de trilhas e análises (`~/.cache/wavegen`);
-3. as preferências (`~/.config/wavegen`);
-4. a pasta do projeto inteira (código, `.venv` e projetos `.wavegen.json` salvos
-   dentro dela; o script avisa quantos existem).
+2. o app instalado (`~/.config/wavegen/app`);
+3. o cache de trilhas e análises (`~/.cache/wavegen`);
+4. as preferências (`~/.config/wavegen/settings.json`);
+5. a pasta do código-fonte de onde o app foi instalado (o script avisa se houver projetos
+   `.wavegen.json` salvos dentro dela).
 
-Para remover tudo de uma vez: `./scripts/uninstall.sh --all` (pede uma única confirmação).
-O script se recusa a rodar com o app aberto ou renderizando, e só apaga a pasta se ela for
-mesmo a do Wavegen.
+Para remover tudo de uma vez: `uninstall.sh --all` (pede uma única confirmação).
+O script se recusa a rodar com o app aberto ou renderizando, e só apaga pastas que sejam mesmo
+do Wavegen.
 
-Nunca são removidos: os vídeos exportados, projetos salvos fora da pasta do projeto e os
-pacotes do sistema. Se quiser remover os pacotes também (e nada mais os usar):
+Nunca são removidos: os vídeos exportados, projetos salvos fora dessas pastas e os pacotes do
+sistema. Se quiser remover os pacotes também (e nada mais os usar):
 
 ```bash
 sudo pacman -Rs uv portaudio      # o ffmpeg costuma ser usado por outros programas
 ```
 
-Para tirar só o atalho do menu: `./scripts/install-desktop.sh --remove`.
-
 ## Executar
 
 - Pelo menu de aplicativos: **Wavegen**.
-- Pelo terminal: `uv run wavegen` (ou `uv run wavegen meu.wavegen.json` para abrir um projeto).
-- Sem interface: `uv run wavegen render --project meu.wavegen.json --out video.mp4`
+- Pelo terminal: `~/.config/wavegen/app/.venv/bin/wavegen` (ou com um projeto:
+  `… wavegen meu.wavegen.json`).
+- Sem interface (renderiza direto):
+  `~/.config/wavegen/app/.venv/bin/wavegen render --project meu.wavegen.json --out video.mp4`
   (opcional `--sample INICIO DURACAO` para renderizar só um trecho).
+- Lista de faixas no terminal: `… wavegen tracklist meu.wavegen.json`.
 
-## Como usar (fluxo da janela)
+De dentro da pasta do código, `uv run wavegen` também funciona.
 
-1. **Fundo (imagem ou vídeo)** (coluna esquerda): “Escolher imagem ou vídeo…” ou arraste o
-   arquivo para a janela. Imagens: PNG, JPG/JPEG, WebP, BMP e TIFF. Vídeos: MP4, MOV, MKV,
-   WebM, AVI, GIF e outros que o FFmpeg leia. Nada é deformado; na aba **Fundo** você escolhe
-   entre *Preencher a tela* (corta as sobras; ajuste a posição do recorte e o zoom) e
-   *Imagem inteira* (sem cortes; as faixas vazias recebem o fundo desfocado ou uma cor).
-   Também dá para escurecer o fundo.
-   **Vídeo de fundo:** toca sem som (o áudio é só o das músicas). Se for mais curto que a
-   playlist, a opção **“Repetir o vídeo em loop até a última faixa terminar”** (aba Fundo,
-   ligada por padrão) faz ele recomeçar até o fim; desligada, o último quadro fica parado.
-   Se for mais longo, é cortado no fim da última música. O painel avisa qual caso se aplica.
-2. **Músicas**: “＋ Adicionar” ou arrastar arquivos (MP3, WAV, FLAC, AAC, M4A, OGG, Opus…).
+## Como usar
+
+1. **Fundo** (coluna esquerda): “Escolher imagem ou vídeo…” ou arraste o arquivo para a janela.
+   - Imagens: PNG, JPG/JPEG, WebP, BMP e TIFF. Vídeos: MP4, MOV, MKV, WebM, AVI, GIF e outros
+     que o FFmpeg leia.
+   - Nada é deformado. Na aba **Fundo**: *Preencher a tela* (corta as sobras; ajuste a posição
+     do recorte e o zoom) ou *Imagem inteira* (sem cortes; as sobras recebem o fundo
+     desfocado ou uma cor). Também dá para escurecer o fundo.
+   - **Vídeo de fundo** toca sem som (o áudio é só o das músicas). Se for mais curto que a
+     playlist, a opção **“Repetir em loop até a última faixa”** (aba Fundo, ligada por padrão)
+     faz ele recomeçar até o fim; desligada, o último quadro fica parado. Se for mais longo, é
+     cortado no fim da última música. O painel avisa qual caso se aplica.
+2. **Músicas**: “＋ Adicionar” ou arraste arquivos (MP3, WAV, FLAC, AAC, M4A, OGG, Opus…).
    A ordem da lista é a ordem do vídeo; reordene arrastando ou com ↑ ↓. A duração de cada faixa
-   e o total aparecem embaixo. Na aba **Áudio**: tocar em sequência (padrão) ou embaralhado,
-   volume geral, crossfade, intervalo entre faixas, fade-in/fade-out.
+   e o total aparecem embaixo. Na aba **Áudio**: em sequência (padrão) ou embaralhado, volume
+   geral, crossfade, intervalo entre faixas, fade-in/fade-out.
 3. **Estilo**: escolha um dos 11 visualizadores na galeria.
 4. **Personalizar**: os controles mudam conforme o estilo (cores, gradiente, opacidade, brilho,
-   barras, espessura, raio…), além de posição/tamanho (números ou **arrastando o retângulo
-   na pré-visualização**: arraste para mover, puxe cantos/bordas para redimensionar,
-   Shift = ajuste fino) e comportamento (sensibilidade, resposta, suavidade).
+   barras, espessura, raio…), além de posição e tamanho. Também dá para **arrastar o retângulo
+   na pré-visualização**: arraste para mover, puxe cantos e bordas para redimensionar,
+   Shift = ajuste fino.
 5. **Pré-visualização**: ▶ (ou Espaço) toca a trilha real com o visualizador animado. O preview
-   é desenhado em resolução menor, mas com o mesmo código e as mesmas proporções do vídeo final.
-6. **Exportar**: resolução, fps, formato, qualidade, CPU/GPU, pasta e nome. O tamanho
-   mostrado é uma **estimativa**.
-7. **Testar 15 s** renderiza um trecho a partir da posição atual, para conferir o resultado
-   final. **Renderizar vídeo** gera o arquivo completo. Dá para acompanhar o progresso,
-   o tempo decorrido e o restante, e cancelar a qualquer momento.
+   usa resolução menor, mas o mesmo código e as mesmas proporções do vídeo final.
+6. **Exportar**: resolução, fps, formato, qualidade, CPU/GPU, pasta e nome. O tamanho mostrado
+   é uma **estimativa**.
+7. **Testar 15 s** renderiza um trecho a partir da posição atual, para conferir o resultado.
+   **Renderizar vídeo** gera o arquivo completo, com progresso, tempo decorrido e restante, e
+   pode ser cancelado a qualquer momento.
 
-**Lista de faixas para o YouTube:** o botão “Lista de faixas para o YouTube…” (embaixo da lista
-de músicas, ou no menu Arquivo) mostra o tempo em que cada música começa no vídeo, na ordem
-final (considerando intervalo, crossfade e embaralhamento). Dá para editar os títulos (o padrão
-vem das tags *artista – título* da música ou do nome do arquivo), escolher se a troca durante um
-crossfade é marcada no início ou no meio da transição, numerar, **Copiar** e **Salvar .txt**. Na
-aba Exportar, a opção “Salvar também a lista de faixas” (ligada por padrão) grava
-`<nome do vídeo> - lista de faixas.txt` ao lado do vídeo. O app avisa quando a lista não atende
-às regras de capítulos do YouTube (começar em 0:00, 3 ou mais faixas, cada uma com 10 s ou
-mais). No terminal: `uv run wavegen tracklist projeto.wavegen.json`.
+### Vinil com capa (nome da faixa e contador)
 
-Projetos são salvos em JSON (`Arquivo → Salvar projeto`, extensão `.wavegen.json`). Eles
-guardam caminhos, ordem das músicas, estilo, parâmetros, posição e configurações. A mídia não
-é copiada para dentro do projeto. Se algum arquivo foi movido, o app avisa e pede para
-localizá-lo (e procura os outros arquivos na mesma pasta nova). As preferências de exportação,
-as pastas recentes e o tamanho da janela ficam em `~/.config/wavegen/settings.json`.
+![Resultado do estilo Vinil com capa](docs/images/07-resultado-vinil.jpg)
+
+- **Capa**: Personalizar → Capa → “Escolher…”. Vazio = usa a imagem de fundo (com fundo em
+  vídeo, uma capa padrão). Imagens que não são quadradas são recortadas no centro. Borda,
+  cantos arredondados e sombra ajustáveis.
+- **Disco**: quanto sai de trás da capa, tamanho, rotação (33⅓/45 rpm ou parado), cor do vinil
+  e rótulo em cor ou com a própria capa.
+- **Nome e contador**: nome da música que está tocando (das tags, do nome do arquivo ou do
+  título editado na Lista de faixas), número da faixa (01 / 12) e contador com barra de
+  progresso: tempo/duração, tempo restante ou decorrido. Posição (nome em cima e contador
+  embaixo, tudo em cima ou tudo embaixo), tamanho, cores e sombra. O nome entra deslizando a
+  cada troca de faixa, e nomes longos diminuem a fonte para caber.
+- **Waveform**: reage às batidas (picos, como nos vídeos de referência) ou ao volume.
+- Para um efeito de “green screen”, deixe o fundo sem imagem com a cor verde (aba Fundo), ou
+  exporte em formato transparente para o Resolve.
+
+### Lista de faixas para o YouTube
+
+O botão **“Lista de faixas para o YouTube…”** (embaixo da lista de músicas, ou no menu Arquivo)
+mostra o tempo em que cada música começa no vídeo, na ordem final (considerando intervalo,
+crossfade e embaralhamento).
+
+- Dá para editar os títulos (o padrão vem das tags *artista – título* ou do nome do arquivo),
+  escolher se a troca durante um crossfade é marcada no início ou no meio da transição,
+  numerar, **Copiar** e **Salvar .txt**.
+- Na aba Exportar, “Salvar também a lista de faixas” (ligada por padrão) grava
+  `<nome do vídeo> - lista de faixas.txt` ao lado do vídeo.
+- O app avisa quando a lista não atende às regras de capítulos do YouTube (começar em 0:00,
+  3 ou mais faixas, cada uma com 10 s ou mais).
+
+### Projetos
+
+`Arquivo → Salvar projeto` grava um `.wavegen.json` com os caminhos, a ordem das músicas, o
+estilo, os parâmetros, a posição e as configurações. A mídia não é copiada para dentro do
+projeto. Se algum arquivo foi movido, o app avisa e pede para localizá-lo (e procura os outros
+na mesma pasta nova). Preferências, pastas recentes e tamanho da janela ficam em
+`~/.config/wavegen/settings.json`.
 
 ## Estilos
 
@@ -182,9 +233,7 @@ as pastas recentes e o tamanho da janela ficam em `~/.config/wavegen/settings.js
 | Onda simétrica | espectro | forma espelhada preenchida, em camadas |
 | Waveform preenchido | envoltória da música | forma de onda rolando como num editor de áudio, trecho futuro mais apagado, linha de reprodução |
 | Visualizador neon | espectro | linhas/barras com brilho (glow) |
-| Vinil com capa | envoltória (batidas ou volume) | capa quadrada com **imagem personalizada**, disco de vinil girando (33⅓/45 rpm, rótulo em cor ou com a capa) e barras arredondadas que nascem no disco e correm para o lado |
-
-No **Vinil com capa**, a capa é escolhida em Personalizar → Capa (vazio = usa a imagem de fundo; com fundo em vídeo, uma capa padrão). O grupo **Nome e contador** mostra o nome da faixa que está tocando (das tags ou do nome do arquivo, ou o título editado na Lista de faixas), o número da faixa (03 / 12) e um contador com barra de progresso: tempo/duração, tempo restante ou decorrido. Dá para escolher a posição (nome em cima e contador embaixo, tudo em cima ou tudo embaixo), tamanho, cores e sombra; o nome entra deslizando a cada troca de faixa. Nomes longos diminuem a fonte para caber. Para um efeito de “green screen” como nos vídeos de exemplo, deixe o fundo sem imagem com a cor verde (aba Fundo), ou exporte em formato transparente para o Resolve.
+| Vinil com capa | envoltória (batidas ou volume) | capa personalizada, disco de vinil girando, barras arredondadas que correm a partir do disco, nome da faixa e contador |
 
 Para criar um estilo novo, faça uma subclasse de `Style` em `src/wavegen/styles/`, declare os
 `params` (`ParamSpec`) e implemente `draw()`. Ele aparece na galeria e o painel de controles é
@@ -195,7 +244,7 @@ gerado automaticamente.
 | Formato | Uso | Observação |
 |---|---|---|
 | MP4 · H.264 + AAC (padrão) | YouTube | `yuv420p`, BT.709, `+faststart`; *Alta qualidade* = CRF 18 / AAC 320k; *Arquivo menor* = CRF 23 / AAC 192k |
-| MOV · ProRes 4444 com alfa | DaVinci Resolve (sobreposição) | sem imagem de fundo, áudio PCM 24 bits; arquivos grandes |
+| MOV · ProRes 4444 com alfa | DaVinci Resolve (sobreposição) | sem fundo, áudio PCM 24 bits; arquivos grandes |
 | MOV · PNG com alfa | Resolve/edição sem perdas | ainda maior |
 
 Predefinições: 1920×1080, 1280×720, 3840×2160, 1080×1920 (vertical) e 1080×1080 (quadrado);
@@ -205,58 +254,71 @@ Predefinições: 1920×1080, 1280×720, 3840×2160, 1080×1920 (vertical) e 1080
 montadas numa única trilha em 32 bits float a 48 kHz, codificada **uma vez** em AAC. Com uma
 única música AAC/M4A, sem volume nem fades, o áudio original é **copiado sem recodificar**.
 
+**Fundo em vídeo:** o FFmpeg decodifica o vídeo e sobrepõe o visualizador durante a
+codificação. Fica cerca de 20% mais lento que com imagem (medido: 1 minuto em 1080p em 27 s,
+contra 22 s com imagem).
+
 ### GPU AMD (VAAPI)
 
 A opção *GPU (VAAPI)* usa `h264_vaapi` para a **codificação** do vídeo. O desenho do waveform
 continua na CPU (com vários processos em paralelo), então não é “renderização por GPU”
-completa. O app testa a GPU de verdade antes de habilitar a opção. Se ela não estiver
-disponível ou falhar durante a renderização, você recebe uma mensagem clara e a oferta de
-renderizar de novo pela CPU. Os arquivos VAAPI saem maiores (~2×) para a mesma qualidade
-visual.
+completa. O app testa a GPU antes de habilitar a opção. Se ela não estiver disponível ou falhar
+durante a renderização, aparece uma mensagem clara e a oferta de renderizar de novo pela CPU.
+Os arquivos VAAPI saem maiores (~2×) para a mesma qualidade visual.
 
-Medido neste PC (RX 9060 XT), trilha de 7min26s em 1080p30: **CPU 2min34s (155 MB)**,
+Medido num PC com RX 9060 XT, trilha de 7min26s em 1080p30: **CPU 2min34s (155 MB)**,
 **GPU 1min47s (312 MB)**.
 
 ## Solução de problemas
 
-- **Ajuda → Diagnóstico do sistema** mostra a versão do FFmpeg, os encoders, o teste VAAPI
-  e o estado do áudio. O botão **Diagnóstico** (rodapé) abre o log técnico com as mensagens
+- **Ajuda → Diagnóstico do sistema** mostra a versão do FFmpeg, os encoders, o teste VAAPI e o
+  estado do áudio. O botão **Diagnóstico** (rodapé) abre o log técnico com as mensagens
   completas do FFmpeg.
 - *“FFmpeg não encontrado”*: `sudo pacman -S ffmpeg`.
 - *GPU indisponível*: instale `libva-mesa-driver`, confira com `vainfo` se aparece
   `VAEntrypointEncSlice` para H.264, e se o usuário tem acesso a `/dev/dri/renderD128`
   (grupo `render`). Enquanto isso, use CPU.
 - *Preview mudo*: instale `portaudio`; veja o log.
+- *Preview com vídeo de fundo engasgando*: é só o preview; o vídeo final não é afetado.
 - *Pouco espaço em disco*: o app verifica antes de começar e avisa.
-- *Arquivo corrompido ou não suportado*: a música não entra na lista e o motivo é mostrado.
+- *Arquivo corrompido ou não suportado*: o arquivo não entra e o motivo é mostrado.
 - O cache das trilhas montadas fica em `~/.cache/wavegen` (**Ajuda → Limpar cache de áudio**).
 
-## Testes
+## Para desenvolvedores
 
 ```bash
-uv run python -m unittest discover -s tests -v       # 49 testes (~15 s)
-QT_QPA_PLATFORM=offscreen uv run python tests/gui_smoke.py PASTA_SAIDA IMAGEM AUDIO...   # interface
+uv run wavegen                                         # roda direto da pasta do código
+uv run python -m unittest discover -s tests -v         # 49 testes (~15 s)
+QT_QPA_PLATFORM=offscreen uv run python tests/gui_smoke.py PASTA_SAIDA IMAGEM AUDIO...  # interface
+QT_QPA_PLATFORM=offscreen uv run python tests/readme_shots.py   # refaz as imagens do README
 ```
 
 Os testes cobrem: duração da playlist (sequência, intervalo, crossfade), trilha amostra por
 amostra igual ao original (sem silêncio extra, sem normalização), fades/volume, sincronia
 (cliques caem no quadro certo a 30/60 fps), determinismo (1 processo = N processos, quadro a
-quadro), os estilos serem diferentes entre si e reagirem ao áudio, preview proporcional ao
-vídeo final, parâmetros do FFmpeg (caminhos com espaços, `-` e `:`), renderização real de MP4
-(streams, duração, áudio = vídeo), cancelamento sem arquivo parcial e projeto salvo/carregado.
+quadro), estilos diferentes entre si e reagindo ao áudio, preview proporcional ao vídeo final,
+parâmetros do FFmpeg (caminhos com espaços, `-` e `:`), renderização real de MP4 (streams,
+duração, áudio = vídeo), fundo em vídeo com e sem loop, nome/contador da faixa certa,
+lista de faixas, cancelamento sem arquivo parcial e projeto salvo/carregado.
 
-## Arquitetura
+As imagens em `docs/images/` são geradas por `tests/readme_shots.py` com fundo, vídeo e
+músicas sintéticos.
 
 ```
 src/wavegen/
   ffmpeg.py      FFmpeg/ffprobe: localização, sondagem, teste VAAPI, erros traduzidos
   playlist.py    faixas, configurações de áudio, montagem da trilha única (cache)
   analysis.py    análise do áudio (256 bandas, nível, envoltória) + suavização determinística
-  styles/        biblioteca de estilos (base.py, spectrum.py, waves.py)
+  styles/        biblioteca de estilos (base.py, spectrum.py, waves.py, vinyl.py)
   compositor.py  fundo + visualizador num quadro (o mesmo código no preview e na exportação)
+  video.py       vídeo de fundo: sondagem, enquadramento, loop, leitura para o preview
+  tracklist.py   tempos de cada faixa no vídeo (lista para o YouTube, nome/contador)
   export.py      predefinições, comando de codificação, estimativa de tamanho
   parallel.py    desenho dos quadros em vários processos (memória compartilhada)
   job.py         renderização em processo separado, progresso em JSON, verificação final
   project.py     projeto (.wavegen.json) e preferências
   gui/           interface PySide6: janela, preview interativo, player, widgets
+scripts/
+  install.sh     instala/atualiza em ~/.config/wavegen/app + atalho no menu
+  uninstall.sh   remove tudo (pergunta antes de cada etapa)
 ```

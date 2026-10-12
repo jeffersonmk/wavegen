@@ -433,7 +433,7 @@ class MainWindow(QMainWindow):
         self.bg_dim.setToolTip("Escurece a imagem para destacar o visualizador")
         self.bg_dim.valueChanged.connect(lambda v: self.set_bg("dim", v / 100))
         f.addRow("Escurecer imagem", self.bg_dim)
-        self.bg_loop = QCheckBox("Repetir o vídeo em loop até a última faixa terminar")
+        self.bg_loop = QCheckBox("Repetir em loop até a última faixa")
         self.bg_loop.setToolTip("Desligado: o vídeo toca uma vez e o último quadro fica parado até o fim")
         self.bg_loop.setChecked(True)
         self.bg_loop.setEnabled(False)
