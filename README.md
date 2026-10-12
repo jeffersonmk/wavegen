@@ -47,7 +47,7 @@ sudo pacman -S --needed ffmpeg uv portaudio
 ### 2. Instalar o app
 
 ```bash
-cd ~/Projects/resolve-waveforms      # a pasta onde está o código (baixado ou clonado)
+cd ~/Projects/waveform      # a pasta onde está o código (baixado ou clonado)
 ./scripts/install.sh
 ```
 
@@ -82,14 +82,14 @@ Seus projetos `.wavegen.json`, preferências e cache continuam valendo.
 2. **Traga a versão nova do código**, de um destes jeitos:
    - pelo GitHub:
      ```bash
-     cd ~/Projects/resolve-waveforms
+     cd ~/Projects/waveform
      git pull
      ```
    - por um arquivo .zip: extraia numa pasta qualquer;
    - mudanças feitas direto na pasta do código: já estão no lugar.
 3. **Rode o instalador de novo** a partir da pasta do código novo:
    ```bash
-   cd ~/Projects/resolve-waveforms
+   cd ~/Projects/waveform
    ./scripts/install.sh
    ```
    Ele substitui os arquivos do app em `~/.config/wavegen/app`, instala bibliotecas novas se
@@ -104,7 +104,7 @@ Seus projetos `.wavegen.json`, preferências e cache continuam valendo.
 - **Deu erro de biblioteca ao abrir:** apague o ambiente Python do app e instale de novo:
   ```bash
   rm -rf ~/.config/wavegen/app/.venv
-  cd ~/Projects/resolve-waveforms && ./scripts/install.sh
+  cd ~/Projects/waveform && ./scripts/install.sh
   ```
 - **Quero recomeçar do zero:** rode `./scripts/uninstall.sh` (veja abaixo) e instale de novo.
 
