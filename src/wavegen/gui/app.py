@@ -1151,6 +1151,7 @@ class MainWindow(QMainWindow):
     def _tick(self):
         self._render_current()
         if not self.player.playing:
+            self.player.pause()              # fecha a saída de áudio que chegou ao fim
             self.play_timer.stop()
             self.btn_play.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
 

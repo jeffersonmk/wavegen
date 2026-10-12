@@ -52,15 +52,24 @@ class AudioPlayer:
     def play(self):
         if self.pcm is None or self.length == 0:
             return
+        # Fecha a saída anterior (inclusive a que terminou sozinha no fim da música).
+        # Antes, cada play depois do fim abria mais uma saída e todas consumiam a mesma
+        # música: o áudio e o preview aceleravam 2×, 3×… a cada repetição.
+        self._close()
         if self.pos >= self.length - 1:
             self.pos = 0
         self.playing = True
         if self._sd is not None:
             try:
                 ch = self.pcm.shape[1] if self.pcm.ndim == 2 else 1
-                self._stream = self._sd.OutputStream(samplerate=self.sr, channels=ch, dtype="float32",
-                                                     callback=self._callback, latency="low")
-                self._stream.start()
+                stream = None
+
+                def cb(out, frames, t, status):
+                    self._callback(out, frames, t, status, stream)
+                stream = self._sd.OutputStream(samplerate=self.sr, channels=ch, dtype="float32",
+                                               callback=cb, latency="low")
+                self._stream = stream
+                stream.start()
                 return
             except Exception as e:
                 self.error = f"Não foi possível abrir a saída de áudio ({e}). Preview mudo."
@@ -102,9 +111,12 @@ class AudioPlayer:
             except Exception:
                 pass
 
-    def _callback(self, out, frames, _time, _status):
+    def _callback(self, out, frames, _time, _status, stream=None):
         with self._lock:
             pcm = self.pcm
+            if stream is not None and stream is not self._stream:
+                out.fill(0)                      # saída antiga: nunca avança a posição
+                raise self._sd.CallbackStop
             if pcm is None or not self.playing:
                 out.fill(0)
                 return
@@ -115,7 +127,8 @@ class AudioPlayer:
             if chunk.ndim == 1:
                 chunk = chunk[:, None]
             out[:k] = chunk * self.volume
+            self.pos = b
             if k < frames:
                 out[k:] = 0
                 self.playing = False
-            self.pos = b
+                raise self._sd.CallbackStop       # fim da música: encerra esta saída

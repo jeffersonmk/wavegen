@@ -669,5 +669,91 @@ class TestTrackInfoOverlay(unittest.TestCase):
         self.assertAlmostEqual(d.track_len, ents[1].end - ents[1].start, places=3)
 
 
+# ============================================================================ player do preview
+class FakeSD:
+    """Imita o sounddevice: guarda as saídas abertas e chama os callbacks à mão."""
+
+    class CallbackStop(Exception):
+        pass
+
+    def __init__(self):
+        self.streams = []
+
+    def OutputStream(self, callback, **kw):  # noqa: N802
+        sd = self
+
+        class S:
+            def __init__(self):
+                self.active = False
+                self.closed = False
+
+            def start(self):
+                self.active = True
+                sd.streams.append(self)
+
+            def stop(self):
+                self.active = False
+
+            def close(self):
+                self.active = False
+                self.closed = True
+
+            def pull(self, frames):
+                if not self.active:
+                    return
+                out = np.zeros((frames, 2), np.float32)
+                try:
+                    callback(out, frames, None, None)
+                except sd.CallbackStop:
+                    self.active = False
+        return S()
+
+    def tick(self, frames=1024):
+        for s in list(self.streams):
+            s.pull(frames)
+
+    def open_count(self):
+        return sum(1 for s in self.streams if s.active)
+
+
+class TestPreviewPlayer(unittest.TestCase):
+    def make(self, seconds=1.0):
+        from wavegen.gui.player import AudioPlayer
+        pl = AudioPlayer()
+        pl._sd = FakeSD()
+        pl.error = None
+        pl.set_source(np.zeros((int(48000 * seconds), 2), np.float32), 48000)
+        return pl
+
+    def play_to_end(self, pl):
+        pl.play()
+        for _ in range(500):
+            if not pl.playing:
+                break
+            pl._sd.tick()
+        self.assertFalse(pl.playing)
+
+    def test_replay_after_end_keeps_normal_speed(self):
+        """Bug: ao tocar de novo depois do fim, saídas antigas continuavam abertas e o
+        áudio/preview acelerava (2×, 3×…) a cada repetição."""
+        pl = self.make()
+        for _ in range(4):
+            self.play_to_end(pl)
+            pl.play()
+            self.assertLessEqual(pl._sd.open_count(), 1)
+            before = pl.position()
+            pl._sd.tick(1000)
+            self.assertEqual(pl.position() - before, 1000)      # velocidade normal
+            pl.pause()
+        self.assertEqual(pl._sd.open_count(), 0)
+
+    def test_play_twice_does_not_open_two_outputs(self):
+        pl = self.make()
+        pl.play()
+        pl.play()
+        self.assertEqual(pl._sd.open_count(), 1)
+        pl.close()
+
+
 if __name__ == "__main__":
     unittest.main()
