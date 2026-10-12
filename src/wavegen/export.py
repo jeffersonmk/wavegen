@@ -71,6 +71,7 @@ class EncodeJob:
     audio_copy_from: Path | None = None  # copiar AAC original sem recodificar
     audio_start: float = 0.0
     duration: float | None = None
+    video_bg: object | None = None     # video.VideoBackgroundSpec: quadros do stdin vão por cima
 
 
 def build_encode_command(job: EncodeJob, out: Path) -> list[str]:
@@ -82,6 +83,11 @@ def build_encode_command(job: EncodeJob, out: Path) -> list[str]:
         cmd += ["-vaapi_device", job.vaapi_device or "/dev/dri/renderD128"]
     cmd += ["-f", "rawvideo", "-pix_fmt", "bgra", "-s", f"{job.width}x{job.height}",
             "-r", fps, "-i", "pipe:0"]
+    n_in = 1
+    if job.video_bg is not None:
+        cmd += job.video_bg.args
+        n_in += 1
+    a_idx = n_in
     has_audio = False
     if job.audio_copy_from is not None:
         cmd += ["-i", media_arg(job.audio_copy_from)]
@@ -93,20 +99,32 @@ def build_encode_command(job: EncodeJob, out: Path) -> list[str]:
             cmd += ["-t", f"{job.duration:.6f}"]
         cmd += ["-i", media_arg(job.audio_path)]
         has_audio = True
-    cmd += ["-map", "0:v:0"]
+    vf_pre = ""
+    if job.video_bg is not None:
+        # fundo em vídeo (entrada 1) + visualizador transparente (stdin) por cima
+        chain = job.video_bg.chain.replace("[vin]", "[1:v]", 1)
+        vf_pre = chain + ";[bg][0:v]overlay=0:0:format=auto:shortest=1:eof_action=endall"
+        cmd += ["-map", "[v]"]
+    else:
+        cmd += ["-map", "0:v:0"]
     if has_audio:
-        cmd += ["-map", "1:a:0"]
+        cmd += ["-map", f"{a_idx}:a:0"]
+
+    def vf(chain: str) -> list[str]:
+        if not vf_pre:
+            return ["-vf", chain]
+        return ["-filter_complex", f"{vf_pre},{chain}[v]"]
 
     crf, qp, akbps = _Q.get(job.quality, _Q["high"])
     if job.fmt == "mp4":
         tags = ["-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709",
                 "-color_range", "tv"]
         if job.encoder == "vaapi":
-            cmd += ["-vf", "scale=out_color_matrix=bt709:out_range=tv,format=nv12,hwupload",
+            cmd += vf("scale=out_color_matrix=bt709:out_range=tv,format=nv12,hwupload") + [
                     "-c:v", "h264_vaapi", "-rc_mode", "CQP", "-qp", str(qp),
                     "-profile:v", "high", "-g", str(gop)]
         else:
-            cmd += ["-vf", "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p",
+            cmd += vf("scale=out_color_matrix=bt709:out_range=tv,format=yuv420p") + [
                     "-c:v", "libx264", "-preset", "medium", "-crf", str(crf),
                     "-profile:v", "high", "-g", str(gop), "-bf", "2"]
         cmd += tags

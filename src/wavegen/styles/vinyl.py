@@ -9,8 +9,8 @@ import os
 
 import numpy as np
 from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import (QBrush, QColor, QConicalGradient, QImage, QLinearGradient,
-                           QPainterPath, QPen, QRadialGradient)
+from PySide6.QtGui import (QBrush, QColor, QConicalGradient, QFont, QFontMetricsF, QImage,
+                           QLinearGradient, QPainterPath, QPen, QRadialGradient)
 
 from .base import ParamSpec, Style, qcolor, register
 
@@ -54,7 +54,7 @@ class Vinyl(Style):
     overrides = {"color1": "#ffffff", "color2": "#ffffff", "gradient": False}
     params = [
         ParamSpec("cover", "Imagem da capa", "image", "", group="Capa",
-                  tip="Vazio = usa a imagem de fundo do vídeo"),
+                  tip="Vazio = usa a imagem de fundo (com fundo em vídeo, uma capa padrão)"),
         ParamSpec("border", "Borda da capa", "float", 5, 0, 30, 0.5, group="Capa", suffix=" px"),
         ParamSpec("border_color", "Cor da borda", "color", "#000000", group="Capa"),
         ParamSpec("corner", "Cantos arredondados", "float", 0, 0, 80, 1, group="Capa", suffix=" px"),
@@ -83,8 +83,25 @@ class Vinyl(Style):
         ParamSpec("contrast", "Contraste", "float", 7, 2, 30, 0.5, group="Comportamento", suffix=" dB",
                   tip="Menor = barras altas com mais facilidade"),
         ParamSpec("fade_tail", "Esmaecer o final", "bool", False, group="Estilo"),
+        ParamSpec("show_title", "Mostrar nome da faixa", "bool", True, group="Nome e contador"),
+        ParamSpec("show_counter", "Mostrar contador", "bool", True, group="Nome e contador"),
+        ParamSpec("counter_mode", "Contador", "choice", "elapsed_total", group="Nome e contador",
+                  choices=[("elapsed_total", "Tempo / duração"), ("remaining", "Tempo restante"),
+                           ("elapsed", "Tempo decorrido")]),
+        ParamSpec("show_progress", "Barra de progresso", "bool", True, group="Nome e contador"),
+        ParamSpec("show_number", "Número da faixa (03 / 12)", "bool", True, group="Nome e contador"),
+        ParamSpec("text_layout", "Posição do texto", "choice", "split", group="Nome e contador",
+                  choices=[("split", "Nome em cima, contador embaixo"), ("top", "Tudo em cima"),
+                           ("bottom", "Tudo embaixo")]),
+        ParamSpec("text_size", "Tamanho do texto", "float", 1.0, 0.5, 2.0, 0.05, group="Nome e contador"),
+        ParamSpec("text_color", "Cor do texto", "color", "#ffffff", group="Nome e contador"),
+        ParamSpec("accent", "Cor de destaque", "color", "#f7a21b", group="Nome e contador",
+                  tip="Barra de progresso e número da faixa"),
+        ParamSpec("text_shadow", "Sombra no texto", "bool", True, group="Nome e contador"),
+        ParamSpec("title_anim", "Animar troca de faixa", "bool", True, group="Nome e contador",
+                  tip="O nome entra deslizando quando a faixa muda"),
     ]
-    default_box = (0.539, 0.5, 0.922, 0.65)
+    default_box = (0.5, 0.5, 0.86, 0.65)
 
     # ------------------------------------------------------------------ waveform
     def _values(self, d, prm, n: int) -> tuple[np.ndarray, float]:
@@ -122,9 +139,139 @@ class Vinyl(Style):
         img = cached_image(prm.get("cover") or prm.get("_project_image", ""))
 
         x0 = max(c.x() + R, cover.right()) + prm["wave_gap"] * u
-        self._draw_wave(p, QRectF(x0, cover.top(), max(0.0, box.right() - x0), S), d, prm, u, S)
+        area = QRectF(x0, cover.top(), max(0.0, box.right() - x0), S)
+        self._draw_wave(p, area, d, prm, u, S)
         self._draw_disc(p, c, R, d.t, prm, img)
         self._draw_cover(p, cover, prm, u, img)
+        if prm["show_title"] or prm["show_counter"]:
+            self._draw_text(p, area.adjusted(R * 0.12, 0, 0, 0), d, prm, S)
+
+    # ------------------------------------------------------------------ nome + contador
+    @staticmethod
+    def _fmt(sec: float, hours: bool) -> str:
+        sec = max(0, int(sec))
+        h, m, s = sec // 3600, sec % 3600 // 60, sec % 60
+        return f"{h}:{m:02d}:{s:02d}" if hours else f"{m:02d}:{s:02d}"
+
+    def _draw_text(self, p, area: QRectF, d, prm, S):
+        if area.width() < 40:
+            return
+        k = prm["text_size"]
+        hmax = S * prm["wave_height"] / 2
+        top_h = max(0.0, area.height() / 2 - hmax)          # espaço livre acima/abaixo da onda
+        col = QColor(prm["text_color"])
+        acc = QColor(prm["accent"])
+        fam = QFont().defaultFamily()
+
+        def font(px: float, weight, tabular=False) -> QFont:
+            f = QFont(fam)
+            f.setPixelSize(max(6, int(px)))
+            f.setWeight(weight)
+            if tabular:
+                try:
+                    f.setFeature(QFont.Tag("tnum"), 1)      # algarismos de largura fixa
+                except (AttributeError, TypeError):
+                    pass
+            return f
+
+        def text(x, y_base, s, f, c, alpha=1.0):
+            p.setFont(f)
+            if prm["text_shadow"]:
+                sh = QColor(0, 0, 0, int(150 * alpha))
+                p.setPen(sh)
+                o = max(1.0, f.pixelSize() * 0.06)
+                p.drawText(QPointF(x + o, y_base + o), s)
+            cc = QColor(c)
+            cc.setAlphaF(cc.alphaF() * alpha)
+            p.setPen(cc)
+            p.drawText(QPointF(x, y_base), s)
+
+        # ---------- linha do título (com animação de entrada na troca de faixa)
+        f_title = font(S * 0.095 * k, QFont.Bold)
+        f_small = font(S * 0.06 * k, QFont.DemiBold, tabular=True)
+        fm_t, fm_s = QFontMetricsF(f_title), QFontMetricsF(f_small)
+        title_h = fm_t.height() if prm["show_title"] else 0.0
+        num_h = fm_s.height() * 1.15 if prm["show_number"] and d.track_count > 0 else 0.0
+        cnt_h = fm_s.height() * (1.9 if prm["show_progress"] else 1.0) if prm["show_counter"] else 0.0
+
+        layout = prm["text_layout"]
+        pad = S * 0.02
+        if layout == "top":
+            y_title = area.top() + pad
+            y_cnt = y_title + num_h + title_h + pad * 0.5
+        elif layout == "bottom":
+            blk = num_h + title_h + pad * 0.5 + cnt_h
+            y_title = area.bottom() - pad - blk
+            y_cnt = y_title + num_h + title_h + pad * 0.5
+        else:
+            y_title = area.top() + max(pad, top_h - num_h - title_h - pad)
+            y_cnt = area.bottom() - top_h + pad
+        x = area.left()
+        wmax = area.width()
+
+        p.save()
+        p.setRenderHint(p.RenderHint.TextAntialiasing)
+        if prm["show_title"]:
+            a, dx = 1.0, 0.0
+            if prm["title_anim"] and d.track_start > 0:          # não anima a 1ª faixa
+                ph = min(1.0, d.track_pos / 0.7)
+                e = 1 - (1 - ph) ** 3                         # ease-out
+                a, dx = e, (1 - e) * S * 0.12
+            if num_h:
+                num = f"{d.track_index:02d} / {d.track_count:02d}"
+                text(x + dx, y_title + fm_s.ascent(), num, f_small, acc, a)
+            # nome longo: diminui a fonte (até 60%) antes de cortar com "…"
+            ft, fmt = f_title, fm_t
+            tw = fm_t.horizontalAdvance(d.track_title)
+            if tw > wmax:
+                ft = font(f_title.pixelSize() * max(0.6, wmax / tw), QFont.Bold)
+                fmt = QFontMetricsF(ft)
+            title = fmt.elidedText(d.track_title, Qt.ElideRight, wmax)
+            base_y = y_title + num_h + fm_t.ascent() - (fm_t.ascent() - fmt.ascent()) * 0.5
+            text(x + dx, base_y, title, ft, col, a)
+
+        if prm["show_counter"]:
+            hours = d.track_len >= 3600
+            el, tot = d.track_pos, d.track_len
+            mode = prm["counter_mode"]
+            if mode == "remaining":
+                left_s, right_s = "-" + self._fmt(tot - el, hours), ""
+            elif mode == "elapsed":
+                left_s, right_s = self._fmt(el, hours), ""
+            else:
+                left_s, right_s = self._fmt(el, hours), self._fmt(tot, hours)
+            if not prm["show_title"] and num_h:
+                left_s = f"{d.track_index:02d}/{d.track_count:02d}   " + left_s
+            yb = y_cnt + fm_s.ascent()
+            if prm["show_progress"]:
+                bar_y = y_cnt + fm_s.height() * 0.5
+                lw = fm_s.horizontalAdvance(left_s) + S * 0.03
+                rw = (fm_s.horizontalAdvance(right_s) + S * 0.03) if right_s else 0.0
+                bx0, bx1 = x + lw, x + wmax - rw
+                if bx1 - bx0 < S * 0.15:                     # pouco espaço: barra embaixo
+                    bx0, bx1 = x, x + wmax
+                    bar_y = y_cnt + fm_s.height() * 1.45
+                    rw = 0.0
+                text(x, yb, left_s, f_small, col)
+                if right_s:
+                    rx = x + wmax - fm_s.horizontalAdvance(right_s)
+                    text(rx, yb, right_s, f_small, col, 0.75)
+                th = max(2.0, S * 0.012 * k)
+                frac = 0.0 if tot <= 0 else min(1.0, el / tot)
+                p.setPen(Qt.NoPen)
+                bg = QColor(col)
+                bg.setAlphaF(0.25)
+                p.setBrush(bg)
+                p.drawRoundedRect(QRectF(bx0, bar_y - th / 2, bx1 - bx0, th), th / 2, th / 2)
+                p.setBrush(acc)
+                fx = bx0 + (bx1 - bx0) * frac
+                p.drawRoundedRect(QRectF(bx0, bar_y - th / 2, max(th, fx - bx0), th), th / 2, th / 2)
+                p.setBrush(col)
+                p.drawEllipse(QPointF(fx, bar_y), th * 1.6, th * 1.6)
+            else:
+                s = left_s + (f"  /  {right_s}" if right_s else "")
+                text(x, yb, s, f_small, col)
+        p.restore()
 
     def _draw_wave(self, p, area: QRectF, d, prm, u, S):
         if area.width() < 4:

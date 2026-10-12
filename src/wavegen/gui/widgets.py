@@ -194,7 +194,7 @@ def make_editor(spec: ParamSpec, value, on_change: Callable[[str, object], None]
     return w
 
 
-GROUP_ORDER = ["Capa", "Disco", "Cores", "Tamanho", "Estilo", "Comportamento"]
+GROUP_ORDER = ["Capa", "Disco", "Nome e contador", "Cores", "Tamanho", "Estilo", "Comportamento"]
 
 
 class ParamPanel(QWidget):

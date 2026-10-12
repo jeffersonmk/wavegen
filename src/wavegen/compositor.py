@@ -18,6 +18,7 @@ from .analysis import Features, SeriesProvider, envelope_window, scope
 from .ffmpeg import WavegenError, ffmpeg_path, media_arg
 from .project import BackgroundSettings, Box, Project
 from .styles import FrameData, get_style
+from .video import is_video
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"}
 FMT = QImage.Format_ARGB32_Premultiplied
@@ -28,6 +29,8 @@ def load_image(path: str) -> QImage:
     p = Path(path)
     if not p.is_file():
         raise WavegenError(f"Imagem não encontrada: {p}", code="missing_file")
+    if is_video(path):
+        return video_thumbnail(path)
     reader = QImageReader(str(p))
     reader.setAutoTransform(True)
     img = reader.read()
@@ -41,6 +44,22 @@ def load_image(path: str) -> QImage:
         if img.isNull():
             raise WavegenError(f"“{p.name}” não é uma imagem válida ou o formato não é suportado.",
                                details=reader.errorString(), code="bad_image")
+    return img.convertToFormat(FMT)
+
+
+def video_thumbnail(path: str, at: float | None = None) -> QImage:
+    """Um quadro do vídeo (por padrão a ~10% da duração) como imagem."""
+    from .video import probe_video
+    info = probe_video(path)
+    t = info.duration * 0.1 if at is None else at
+    t = max(0.0, min(t, info.duration - 0.05))
+    r = subprocess.run([ffmpeg_path(), "-v", "error", "-ss", f"{t:.3f}", "-i", media_arg(path),
+                        "-frames:v", "1", "-f", "image2pipe", "-c:v", "png", "pipe:1"],
+                       capture_output=True)
+    img = QImage.fromData(r.stdout, "PNG")
+    if img.isNull():
+        raise WavegenError(f"Não foi possível ler um quadro de “{Path(path).name}”.",
+                           details=r.stderr.decode(errors="replace"), code="bad_video")
     return img.convertToFormat(FMT)
 
 
@@ -89,15 +108,22 @@ def box_rect(box: Box, W: int, H: int) -> QRectF:
 class Compositor:
     def __init__(self, project: Project, W: int, H: int, feats: Features,
                  pcm: np.ndarray | None, transparent: bool = False,
-                 background: QImage | None = None, source_image: QImage | None = None):
+                 background: QImage | None = None, source_image: QImage | None = None,
+                 bg_provider=None):
+        """bg_provider: função n -> QImage W×H (fundo em vídeo no preview); tem prioridade
+        sobre ``background``."""
         self.W, self.H = W, H
+        self.bg_provider = bg_provider
         self.feats = feats
         self.pcm = pcm
         self.transparent = transparent
         self.style = get_style(project.style)
         self.prm = project.params_for()
-        self.prm["_project_image"] = project.background.image
+        # capa vazia = imagem de fundo (com fundo em vídeo, usa a capa padrão)
+        img = project.background.image
+        self.prm["_project_image"] = "" if is_video(img) else img
         self.box = project.box_for()
+        self._init_tracks(project)
         self.resp = project.response
         self.u = min(W, H) / 1080.0
         self.gain = 10 ** (self.resp.sensitivity_db / 20)
@@ -126,7 +152,27 @@ class Compositor:
             d.scope = lambda win, k: np.zeros(k, np.float32)
         d.envelope = lambda win, k: envelope_window(self.feats, t, win, k)
         d.envelope_from = lambda t0, win, k: envelope_window(self.feats, t0, win, k)
+        self._track_info(d)
         return d
+
+    def _init_tracks(self, project: Project):
+        from .tracklist import entries
+        try:
+            self.entries = entries(project.tracks, project.audio, mark="middle")
+        except Exception:  # noqa: BLE001 — sem durações (projeto incompleto): sem nomes
+            self.entries = []
+        self._starts = np.array([e.start for e in self.entries], dtype=np.float64)
+
+    def _track_info(self, d: FrameData):
+        if not self.entries:
+            d.track_title, d.track_index, d.track_count = "Nome da música", 1, 1
+            d.track_start, d.track_len, d.track_pos = 0.0, float(self.feats.duration), d.t
+            return
+        i = max(0, int(np.searchsorted(self._starts, d.t, side="right")) - 1)
+        e = self.entries[i]
+        d.track_title, d.track_index, d.track_count = e.title, e.index, len(self.entries)
+        d.track_start, d.track_len = e.start, max(0.0, e.end - e.start)
+        d.track_pos = min(max(0.0, d.t - e.start), d.track_len)
 
     def render(self, n: int, out: QImage | None = None) -> QImage:
         rect = box_rect(self.box, self.W, self.H)
@@ -138,11 +184,12 @@ class Compositor:
         finally:
             p.end()
 
-        frame = out if out is not None else QImage(self.bg)
+        bg = self.bg_provider(n) if self.bg_provider is not None else self.bg
+        frame = out if out is not None else QImage(bg).convertToFormat(FMT)
         if out is not None:
             p = QPainter(frame)
             p.setCompositionMode(QPainter.CompositionMode_Source)
-            p.drawImage(0, 0, self.bg)
+            p.drawImage(0, 0, bg)
             p.end()
         p = QPainter(frame)
         p.setRenderHint(QPainter.SmoothPixmapTransform)

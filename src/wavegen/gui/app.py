@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QButtonGroup, QC
 from .. import __version__
 from ..analysis import ensure_features
 from ..compositor import IMAGE_EXTS, Compositor, compose_background, load_image
+from ..video import VIDEO_EXTS, VideoDecoder, is_video, probe_video
 from ..export import (FORMATS, FPS_CHOICES, PRESETS, QUALITIES, default_filename,
                       estimate_size, extension, fps_of, is_transparent, resolution)
 from ..ffmpeg import WavegenError, check_vaapi, encoders, ffmpeg_path, ffmpeg_version
@@ -113,6 +114,7 @@ class MainWindow(QMainWindow):
         self.comp: Compositor | None = None
         self._src_cache: dict = {}
         self._bg_cache: dict = {}
+        self._video: VideoDecoder | None = None
         self.cur_frame = 0
         self.render_proc: QProcess | None = None
         self.render_t0 = 0.0
@@ -146,15 +148,15 @@ class MainWindow(QMainWindow):
         ll = QVBoxLayout(left)
         ll.setContentsMargins(6, 6, 6, 6)
 
-        gi = QGroupBox("1 · Imagem de fundo")
+        gi = QGroupBox("1 · Fundo (imagem ou vídeo)")
         gl = QVBoxLayout(gi)
-        self.img_thumb = QLabel("Nenhuma imagem\n(arraste uma imagem para a janela)")
+        self.img_thumb = QLabel("Nenhum fundo\n(arraste uma imagem ou vídeo para a janela)")
         self.img_thumb.setAlignment(Qt.AlignCenter)
         self.img_thumb.setMinimumHeight(130)
         self.img_thumb.setStyleSheet("QLabel{border:1px dashed #555;border-radius:6px;color:#999}")
         gl.addWidget(self.img_thumb)
         row = QHBoxLayout()
-        b = QPushButton("Escolher imagem…")
+        b = QPushButton("Escolher imagem ou vídeo…")
         b.clicked.connect(self.choose_image)
         row.addWidget(b)
         self.btn_img_clear = QPushButton("Remover")
@@ -431,9 +433,16 @@ class MainWindow(QMainWindow):
         self.bg_dim.setToolTip("Escurece a imagem para destacar o visualizador")
         self.bg_dim.valueChanged.connect(lambda v: self.set_bg("dim", v / 100))
         f.addRow("Escurecer imagem", self.bg_dim)
+        self.bg_loop = QCheckBox("Repetir o vídeo em loop até a última faixa terminar")
+        self.bg_loop.setToolTip("Desligado: o vídeo toca uma vez e o último quadro fica parado até o fim")
+        self.bg_loop.setChecked(True)
+        self.bg_loop.setEnabled(False)
+        self.bg_loop.toggled.connect(lambda v: self.set_bg("loop_video", v))
+        f.addRow("Vídeo de fundo", self.bg_loop)
         note = QLabel("A imagem nunca é deformada: em “Preencher”, as sobras são cortadas (ajuste a "
                       "posição para escolher o recorte); em “Imagem inteira”, as faixas vazias são "
-                      "preenchidas. A imagem fica estática durante todo o vídeo.")
+                      "preenchidas. A imagem fica estática durante todo o vídeo; um vídeo de fundo toca sem som "
+                      "(o áudio é só o das músicas).")
         note.setWordWrap(True)
         note.setStyleSheet("color:#999;font-size:11px")
         f.addRow(note)
@@ -560,7 +569,7 @@ class MainWindow(QMainWindow):
         self.recent_menu = m.addMenu("Projetos recentes")
         self._refresh_recent()
         m.addSeparator()
-        for text, slot in (("Escolher imagem…", self.choose_image), ("Adicionar músicas…", self.choose_audio),
+        for text, slot in (("Escolher imagem ou vídeo…", self.choose_image), ("Adicionar músicas…", self.choose_audio),
                            ("Lista de faixas para o YouTube…", self.show_tracklist)):
             a = QAction(text, self)
             a.triggered.connect(slot)
@@ -636,6 +645,7 @@ class MainWindow(QMainWindow):
         self.bg_fy.set_value(bg.focus_y * 100)
         self.bg_zoom.set_value(bg.zoom * 100)
         self.bg_dim.set_value(bg.dim * 100)
+        self.bg_loop.setChecked(bg.loop_video)
         a = p.audio
         self.a_seq.setChecked(a.sequential)
         self.a_vol.set_value(a.volume_db)
@@ -797,8 +807,12 @@ class MainWindow(QMainWindow):
     # ================================================================== imagem
     def choose_image(self):
         d = self.prefs.get("image_dir", str(Path.home() / "Pictures"))
-        f, _ = QFileDialog.getOpenFileName(self, "Escolher imagem de fundo", d,
-                                           "Imagens (*.png *.jpg *.jpeg *.webp *.PNG *.JPG *.JPEG *.WEBP *.bmp *.tif *.tiff)")
+        img = "*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff"
+        vid = " ".join(f"*{e}" for e in sorted(VIDEO_EXTS))
+        up = lambda s: s + " " + s.upper()  # noqa: E731
+        f, _ = QFileDialog.getOpenFileName(
+            self, "Escolher imagem ou vídeo de fundo", d,
+            f"Imagens e vídeos ({up(img)} {up(vid)});;Imagens ({up(img)});;Vídeos ({up(vid)})")
         if f:
             self.prefs["image_dir"] = str(Path(f).parent)
             self.set_image(f)
@@ -810,7 +824,8 @@ class MainWindow(QMainWindow):
             except WavegenError as e:
                 self.show_error(e)
                 return
-            self.log_line(f"Imagem: {path} ({img.width()}×{img.height()})")
+            self.log_line(f"{'Vídeo' if is_video(path) else 'Imagem'}: {path} "
+                          f"({img.width()}×{img.height()})")
         self.project.background.image = path
         self.mark_dirty()
         self._refresh_image_info()
@@ -828,7 +843,7 @@ class MainWindow(QMainWindow):
         self.btn_img_clear.setEnabled(bool(path))
         if not path:
             self.img_thumb.setPixmap(QPixmap())
-            self.img_thumb.setText("Nenhuma imagem\n(escolha ou arraste uma imagem para a janela)")
+            self.img_thumb.setText("Nenhum fundo\n(escolha ou arraste uma imagem ou vídeo para a janela)")
             self.img_info.setText("Sem imagem: o fundo usa a cor escolhida na aba “Fundo”.")
             return
         try:
@@ -841,6 +856,23 @@ class MainWindow(QMainWindow):
         self.img_thumb.setPixmap(pm)
         W, H = resolution(self.project.export.preset)
         msgs = [f"<b>{Path(path).name}</b> — {img.width()}×{img.height()}"]
+        self.bg_loop.setEnabled(is_video(path))
+        if is_video(path):
+            try:
+                vi = probe_video(path)
+                total = self.feats.duration if self.feats is not None and not self.using_demo else 0
+                msgs[0] += f" · vídeo de {fmt_time(vi.duration)}"
+                if total and vi.duration + 0.05 < total:
+                    msgs.append("O vídeo é mais curto que as músicas: "
+                                + ("vai repetir em loop até a última faixa terminar."
+                                   if self.project.background.loop_video else
+                                   "o último quadro fica parado até o fim (ative o loop na aba Fundo)."))
+                elif total and vi.duration > total + 0.05:
+                    msgs.append("O vídeo é mais longo que as músicas: será cortado no fim da última faixa.")
+                if vi.has_audio:
+                    msgs.append("O som do vídeo não é usado (só as músicas da playlist).")
+            except WavegenError as e:
+                msgs.append(f"<span style='color:#ff8a80'>{e.message}</span>")
         iar, var = img.width() / img.height(), W / H
         if is_transparent(self.project.export.format):
             msgs.append("<span style='color:#ffd180'>O formato transparente ignora a imagem de fundo.</span>")
@@ -868,8 +900,9 @@ class MainWindow(QMainWindow):
             self.add_files(files)
 
     def add_files(self, files: list[str]):
-        images = [f for f in files if Path(f).suffix.lower() in IMAGE_EXTS]
-        audios = [f for f in files if Path(f).suffix.lower() not in IMAGE_EXTS]
+        visual = IMAGE_EXTS | VIDEO_EXTS
+        images = [f for f in files if Path(f).suffix.lower() in visual]
+        audios = [f for f in files if Path(f).suffix.lower() not in visual]
         if images:
             self.set_image(images[0])
         if not audios:
@@ -1061,10 +1094,23 @@ class MainWindow(QMainWindow):
         if self.feats is None:
             return
         W, H = self.preview_size()
+        transparent = is_transparent(self.project.export.format)
+        provider = None
+        bg = self.project.background
+        if self._video is not None:
+            self._video.close()
+            self._video = None
+        if bg.image and is_video(bg.image) and not transparent:
+            try:
+                self._video = VideoDecoder(bg, W, H, self.feats.fps)
+                dec = self._video
+                provider = lambda n: dec.frame(n, 0.05 if self.player.playing else 3.0)  # noqa: E731
+            except WavegenError as e:
+                self.log_line(f"Vídeo de fundo: {e.message}")
         try:
             self.comp = Compositor(self.project, W, H, self.feats, self.pcm,
-                                   transparent=is_transparent(self.project.export.format),
-                                   background=self._background(W, H))
+                                   transparent=transparent,
+                                   background=self._background(W, H), bg_provider=provider)
         except Exception as e:  # noqa: BLE001
             self.log_line(f"Erro no preview: {e}")
             return
@@ -1583,6 +1629,8 @@ class MainWindow(QMainWindow):
             e.ignore()
             return
         self.player.close()
+        if self._video is not None:
+            self._video.close()
         if self.mix_task is not None:
             self.mix_task.stop()
         ex = self.project.export

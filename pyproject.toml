@@ -1,6 +1,6 @@
 [project]
 name = "wavegen"
-version = "0.2.0"
+version = "0.3.0"
 description = "Vídeos musicais com waveform animado (imagem + músicas → MP4 para o YouTube), também exporta overlays transparentes para o DaVinci Resolve"
 requires-python = ">=3.10"
 dependencies = [

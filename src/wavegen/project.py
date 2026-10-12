@@ -38,6 +38,7 @@ class BackgroundSettings:
     fill: str = "blur"            # com "contain": blur = imagem desfocada | color = cor sólida
     color: str = "#101014"
     dim: float = 0.0              # escurecer o fundo (0..0.8)
+    loop_video: bool = True       # vídeo de fundo: repetir até o fim da trilha (senão, congela no fim)
 
     @classmethod
     def from_dict(cls, d: dict) -> "BackgroundSettings":

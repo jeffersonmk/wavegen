@@ -557,5 +557,117 @@ class TestRenderEndToEnd(CacheIsolation):
         self.assertEqual(cm.exception.code, "permission")
 
 
+# ============================================================================ vídeo de fundo
+def make_video(name: str, seconds: float, size: str = "320x240", rate: int = 24) -> Path:
+    """Vídeo de teste: cada segundo tem uma cor/brilho diferente (fácil de identificar)."""
+    out = TMP / name
+    subprocess.run([ffmpeg_path(), "-v", "error", "-y", "-f", "lavfi", "-i",
+                    f"color=c=black:s={size}:r={rate}:d={seconds},"
+                    "geq=lum='mod(floor(T)*40+20,250)':cb=128:cr=128",
+                    "-c:v", "libx264", "-pix_fmt", "yuv420p", media_arg(out)], check=True)
+    return out
+
+
+def gray_at(path: Path, t: float) -> float:
+    """Brilho médio do canto superior esquerdo (onde não há visualizador) no instante t."""
+    r = subprocess.run([ffmpeg_path(), "-v", "error", "-ss", f"{t:.3f}", "-i", media_arg(path),
+                        "-vf", "crop=iw/8:ih/8:0:0,format=gray", "-frames:v", "1",
+                        "-f", "rawvideo", "-"], capture_output=True, check=True)
+    return float(np.frombuffer(r.stdout, np.uint8).mean())
+
+
+class TestVideoBackground(CacheIsolation):
+    """Fundo em vídeo: loop até o fim da trilha ou último quadro parado."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.vid = make_video("fundo curto.mp4", 2.0)          # 2 s de vídeo
+        cls.a = make_tone("vid A.wav", 2.5, 330, 0.5)
+        cls.b = make_tone("vid B.wav", 2.5, 550, 0.5)          # trilha de 5 s
+        from PySide6.QtGui import QGuiApplication
+        cls.app = QGuiApplication.instance() or QGuiApplication([])
+
+    def render(self, loop: bool, name: str) -> Path:
+        from wavegen.job import run_render
+        p = Project()
+        p.tracks = [load(self.a), load(self.b)]
+        p.background.image = str(self.vid)
+        p.background.loop_video = loop
+        p.style = "vinyl"
+        p.export.preset = "720p"
+        out = TMP / name
+        run_render(p, out, lambda e: None, threading.Event(), workers=1)
+        return out
+
+    def test_probe_and_detection(self):
+        from wavegen.video import is_video, probe_video
+        self.assertTrue(is_video("x/clipe.MP4"))
+        self.assertFalse(is_video("x/capa.png"))
+        info = probe_video(str(self.vid))
+        self.assertEqual((info.width, info.height), (320, 240))
+        self.assertAlmostEqual(info.duration, 2.0, delta=0.1)
+
+    def test_loop_repeats_until_end(self):
+        out = self.render(True, "loop.mp4")
+        st = {s["codec_type"]: s for s in probe_streams(out)["streams"]}
+        self.assertAlmostEqual(float(st["video"]["duration"]), 5.0, delta=0.1)
+        # 0,5 s, 2,5 s e 4,5 s caem no mesmo ponto do vídeo de 2 s
+        g = [gray_at(out, t) for t in (0.5, 2.5, 4.5, 1.5)]
+        self.assertLess(abs(g[0] - g[1]), 4)
+        self.assertLess(abs(g[0] - g[2]), 4)
+        self.assertGreater(abs(g[0] - g[3]), 15)            # segundos diferentes = cores diferentes
+
+    def test_no_loop_freezes_last_frame(self):
+        out = self.render(False, "sem loop.mp4")
+        st = {s["codec_type"]: s for s in probe_streams(out)["streams"]}
+        self.assertAlmostEqual(float(st["video"]["duration"]), 5.0, delta=0.1)
+        g = [gray_at(out, t) for t in (1.5, 3.0, 4.7, 0.5)]
+        self.assertLess(abs(g[0] - g[1]), 4)                # parado no último segundo
+        self.assertLess(abs(g[0] - g[2]), 4)
+        self.assertGreater(abs(g[0] - g[3]), 15)
+
+    def test_preview_decoder_matches_grid(self):
+        from wavegen.project import BackgroundSettings
+        from wavegen.video import VideoDecoder
+        bg = BackgroundSettings(image=str(self.vid), loop_video=True)
+        dec = VideoDecoder(bg, 160, 90, Fraction(30))
+        try:
+            def g(n):
+                img = dec.frame(n)
+                return np.frombuffer(img.constBits(), np.uint8).reshape(90, 160, 4)[..., :3].mean()
+            a, b, c = g(15), g(75), g(45)                    # 0,5 s / 2,5 s (loop) / 1,5 s
+            self.assertLess(abs(a - b), 4)
+            self.assertGreater(abs(a - c), 15)
+        finally:
+            dec.close()
+
+
+class TestTrackInfoOverlay(unittest.TestCase):
+    """O compositor informa ao estilo qual faixa toca e há quanto tempo (nome + contador)."""
+
+    def test_track_info_follows_tracklist(self):
+        from wavegen.compositor import Compositor
+        from wavegen.tracklist import entries
+        a, b = make_tone("info A.wav", 3.0), make_tone("info B.wav", 2.0)
+        p = Project()
+        p.tracks = [load(a), load(b)]
+        p.audio.gap = 0.5
+        ents = entries(p.tracks, p.audio, mark="middle")
+        comp = Compositor.__new__(Compositor)
+        comp.feats = mock.Mock(duration=5.5, fps=Fraction(30))
+        comp._init_tracks(p)
+        from wavegen.styles import FrameData
+        d = FrameData(t=1.0, n=30)
+        comp._track_info(d)
+        self.assertEqual((d.track_index, d.track_count), (1, 2))
+        self.assertEqual(d.track_title, ents[0].title)
+        self.assertAlmostEqual(d.track_pos, 1.0, places=3)
+        d = FrameData(t=ents[1].start + 0.25, n=0)
+        comp._track_info(d)
+        self.assertEqual(d.track_index, 2)
+        self.assertAlmostEqual(d.track_pos, 0.25, places=3)
+        self.assertAlmostEqual(d.track_len, ents[1].end - ents[1].start, places=3)
+
+
 if __name__ == "__main__":
     unittest.main()

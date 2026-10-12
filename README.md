@@ -1,6 +1,6 @@
 # Wavegen — vídeos musicais com waveform animado
 
-Aplicativo para Linux que junta **uma imagem estática + uma ou mais músicas** e gera um
+Aplicativo para Linux que junta **uma imagem ou um vídeo + uma ou mais músicas** e gera um
 **vídeo completo com visualizador de áudio** (waveform/espectro) sincronizado, pronto para o
 YouTube (MP4 · H.264 · AAC). Também exporta o visualizador **com fundo transparente**
 (ProRes 4444 / PNG em .mov) para usar como sobreposição no DaVinci Resolve Free ou Studio.
@@ -125,11 +125,16 @@ Para tirar só o atalho do menu: `./scripts/install-desktop.sh --remove`.
 
 ## Como usar (fluxo da janela)
 
-1. **Imagem de fundo** (coluna esquerda): “Escolher imagem…” ou arraste o arquivo para a janela.
-   Aceita PNG, JPG/JPEG, WebP, BMP e TIFF. A imagem nunca é deformada; na aba **Fundo** você
-   escolhe entre *Preencher a tela* (corta as sobras; ajuste a posição do recorte e o zoom) e
-   *Imagem inteira* (sem cortes; as faixas vazias recebem a imagem desfocada ou uma cor).
-   Também dá para escurecer a imagem.
+1. **Fundo (imagem ou vídeo)** (coluna esquerda): “Escolher imagem ou vídeo…” ou arraste o
+   arquivo para a janela. Imagens: PNG, JPG/JPEG, WebP, BMP e TIFF. Vídeos: MP4, MOV, MKV,
+   WebM, AVI, GIF e outros que o FFmpeg leia. Nada é deformado; na aba **Fundo** você escolhe
+   entre *Preencher a tela* (corta as sobras; ajuste a posição do recorte e o zoom) e
+   *Imagem inteira* (sem cortes; as faixas vazias recebem o fundo desfocado ou uma cor).
+   Também dá para escurecer o fundo.
+   **Vídeo de fundo:** toca sem som (o áudio é só o das músicas). Se for mais curto que a
+   playlist, a opção **“Repetir o vídeo em loop até a última faixa terminar”** (aba Fundo,
+   ligada por padrão) faz ele recomeçar até o fim; desligada, o último quadro fica parado.
+   Se for mais longo, é cortado no fim da última música. O painel avisa qual caso se aplica.
 2. **Músicas**: “＋ Adicionar” ou arrastar arquivos (MP3, WAV, FLAC, AAC, M4A, OGG, Opus…).
    A ordem da lista é a ordem do vídeo; reordene arrastando ou com ↑ ↓. A duração de cada faixa
    e o total aparecem embaixo. Na aba **Áudio**: tocar em sequência (padrão) ou embaralhado,
@@ -179,7 +184,7 @@ as pastas recentes e o tamanho da janela ficam em `~/.config/wavegen/settings.js
 | Visualizador neon | espectro | linhas/barras com brilho (glow) |
 | Vinil com capa | envoltória (batidas ou volume) | capa quadrada com **imagem personalizada**, disco de vinil girando (33⅓/45 rpm, rótulo em cor ou com a capa) e barras arredondadas que nascem no disco e correm para o lado |
 
-No **Vinil com capa**, a capa é escolhida em Personalizar → Capa (vazio = usa a imagem de fundo do vídeo). Para um efeito de “green screen” como nos vídeos de exemplo, deixe o fundo sem imagem com a cor verde (aba Fundo), ou exporte em formato transparente para o Resolve.
+No **Vinil com capa**, a capa é escolhida em Personalizar → Capa (vazio = usa a imagem de fundo; com fundo em vídeo, uma capa padrão). O grupo **Nome e contador** mostra o nome da faixa que está tocando (das tags ou do nome do arquivo, ou o título editado na Lista de faixas), o número da faixa (03 / 12) e um contador com barra de progresso: tempo/duração, tempo restante ou decorrido. Dá para escolher a posição (nome em cima e contador embaixo, tudo em cima ou tudo embaixo), tamanho, cores e sombra; o nome entra deslizando a cada troca de faixa. Nomes longos diminuem a fonte para caber. Para um efeito de “green screen” como nos vídeos de exemplo, deixe o fundo sem imagem com a cor verde (aba Fundo), ou exporte em formato transparente para o Resolve.
 
 Para criar um estilo novo, faça uma subclasse de `Style` em `src/wavegen/styles/`, declare os
 `params` (`ParamSpec`) e implemente `draw()`. Ele aparece na galeria e o painel de controles é
@@ -229,7 +234,7 @@ Medido neste PC (RX 9060 XT), trilha de 7min26s em 1080p30: **CPU 2min34s (155 M
 ## Testes
 
 ```bash
-uv run python -m unittest discover -s tests -v       # 44 testes (~15 s)
+uv run python -m unittest discover -s tests -v       # 49 testes (~15 s)
 QT_QPA_PLATFORM=offscreen uv run python tests/gui_smoke.py PASTA_SAIDA IMAGEM AUDIO...   # interface
 ```
 

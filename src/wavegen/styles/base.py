@@ -57,6 +57,13 @@ class FrameData:
     scope: Callable[[float, int], np.ndarray] | None = None     # (janela_s, n) -> amostras
     envelope: Callable[[float, int], np.ndarray] | None = None  # (janela_s, n) -> picos
     envelope_from: Callable[[float, float, int], np.ndarray] | None = None  # (t, janela_s, n)
+    # faixa tocando neste instante (para estilos que mostram nome/contador)
+    track_title: str = ""
+    track_index: int = 0           # 1, 2, … (0 = sem faixas)
+    track_count: int = 0
+    track_pos: float = 0.0         # s desde o início da faixa
+    track_len: float = 0.0         # duração da faixa no vídeo (s)
+    track_start: float = 0.0       # s (no vídeo) em que a faixa começa
 
 
 class Style:

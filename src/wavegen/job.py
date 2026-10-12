@@ -123,9 +123,18 @@ def run_render(project, out_path: Path, emit: Emit, cancel: threading.Event,
             and a.fade_in <= 0 and a.fade_out <= 0):
         copy_audio = Path(project.tracks[0].path)   # áudio original sem recodificar
 
+    # fundo em vídeo: o FFmpeg decodifica o vídeo e sobrepõe o visualizador (transparente)
+    from .video import export_spec, is_video
+    video_bg = None
+    draw_transparent = transparent
+    if not transparent and is_video(project.background.image):
+        emit({"type": "stage", "stage": "check", "message": "Lendo o vídeo de fundo…"})
+        video_bg = export_spec(project.background, W, H, fps, audio_start)
+        draw_transparent = True
+
     job = EncodeJob(W, H, fps, ex.format, ex.quality, encoder, vaapi_dev,
                     audio_path=mix, audio_copy_from=copy_audio,
-                    audio_start=audio_start, duration=audio_dur)
+                    audio_start=audio_start, duration=audio_dur, video_bg=video_bg)
     tmp = out_path.with_name(f".{out_path.stem}.part{out_path.suffix or '.mp4'}")
     cmd = build_encode_command(job, tmp)
 
@@ -139,16 +148,16 @@ def run_render(project, out_path: Path, emit: Emit, cancel: threading.Event,
     t_err.start()
 
     if workers > 1:
-        frames = ParallelFrames(project, mix, fps, W, H, transparent, n0, n1, workers)
+        frames = ParallelFrames(project, mix, fps, W, H, draw_transparent, n0, n1, workers)
         frame_iter = iter(frames)
     else:
         frames = None
-        comp = Compositor(project, W, H, feats, pcm, transparent=transparent)
+        comp = Compositor(project, W, H, feats, pcm, transparent=draw_transparent)
 
         def _seq():
             for n in range(n0, n1):
                 img = comp.render(n)
-                if transparent:
+                if draw_transparent:
                     img = img.convertToFormat(QImage.Format_ARGB32)
                 yield img.constBits()
         frame_iter = _seq()
