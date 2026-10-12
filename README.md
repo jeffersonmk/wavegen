@@ -44,10 +44,18 @@ sudo pacman -S --needed ffmpeg uv portaudio
 - `portaudio`: som da pré-visualização. Sem ele o app funciona, mas o preview fica mudo.
 - Opcional, para usar a GPU AMD: `libva-mesa-driver` (VAAPI). Confira com `vainfo`.
 
-### 2. Instalar o app
+### 2. Baixar o código
 
 ```bash
-cd ~/Projects/waveform      # a pasta onde está o código (baixado ou clonado)
+git clone https://github.com/jeffersonmk/wavegen.git ~/Projects/wavegen
+```
+
+(ou baixe o .zip pelo GitHub e extraia em `~/Projects/wavegen`; qualquer pasta serve)
+
+### 3. Instalar o app
+
+```bash
+cd ~/Projects/wavegen
 ./scripts/install.sh
 ```
 
@@ -60,7 +68,7 @@ O script:
 Depois de instalado, o app não depende mais da pasta do código: ela pode ser movida ou
 apagada.
 
-### 3. Abrir
+### 4. Abrir
 
 Procure **Wavegen** no menu de aplicativos. Se o ícone não aparecer logo, saia e entre de
 novo na sessão.
@@ -82,14 +90,14 @@ Seus projetos `.wavegen.json`, preferências e cache continuam valendo.
 2. **Traga a versão nova do código**, de um destes jeitos:
    - pelo GitHub:
      ```bash
-     cd ~/Projects/waveform
+     cd ~/Projects/wavegen
      git pull
      ```
    - por um arquivo .zip: extraia numa pasta qualquer;
    - mudanças feitas direto na pasta do código: já estão no lugar.
 3. **Rode o instalador de novo** a partir da pasta do código novo:
    ```bash
-   cd ~/Projects/waveform
+   cd ~/Projects/wavegen
    ./scripts/install.sh
    ```
    Ele substitui os arquivos do app em `~/.config/wavegen/app`, instala bibliotecas novas se
@@ -104,7 +112,7 @@ Seus projetos `.wavegen.json`, preferências e cache continuam valendo.
 - **Deu erro de biblioteca ao abrir:** apague o ambiente Python do app e instale de novo:
   ```bash
   rm -rf ~/.config/wavegen/app/.venv
-  cd ~/Projects/waveform && ./scripts/install.sh
+  cd ~/Projects/wavegen && ./scripts/install.sh
   ```
 - **Quero recomeçar do zero:** rode `./scripts/uninstall.sh` (veja abaixo) e instale de novo.
 

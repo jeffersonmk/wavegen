@@ -37,6 +37,31 @@ def cached_image(path: str) -> QImage | None:
     return _IMG_CACHE[key]
 
 
+_SCALED: dict = {}
+
+
+def scaled_square(img: QImage, px: int) -> QImage:
+    """Recorte quadrado central da imagem já reduzido para px×px com filtro de alta
+    qualidade (média de área do Qt). Desenhar esta versão 1:1 evita o serrilhado de reduzir
+    a imagem original grande a cada quadro. Fica em cache por imagem e tamanho."""
+    px = max(1, int(px))
+    key = (img.cacheKey(), px)
+    out = _SCALED.get(key)
+    if out is None:
+        r = _square_crop(img).toRect()
+        sq = img.copy(r)
+        # reduções grandes em duas etapas (mais nítido e sem moiré)
+        while sq.width() > px * 3:
+            sq = sq.scaled(sq.width() // 2, sq.height() // 2, Qt.IgnoreAspectRatio,
+                           Qt.SmoothTransformation)
+        out = sq.scaled(px, px, Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
+        out = out.convertToFormat(QImage.Format_ARGB32_Premultiplied)
+        if len(_SCALED) > 16:
+            _SCALED.clear()
+        _SCALED[key] = out
+    return out
+
+
 def _square_crop(img: QImage) -> QRectF:
     w, h = img.width(), img.height()
     s = min(w, h)
@@ -293,13 +318,19 @@ class Vinyl(Style):
             p.setBrush(qcolor(col1))
         else:
             p.setBrush(QBrush(g))
+        # Barras alinhadas à grade de pixels: largura inteira e bordas em pixels inteiros,
+        # então todas as barras têm a mesma espessura e ficam nítidas (sem "tremer" ao rolar).
+        wp = max(3, int(round(w)))          # ≥3 px: pontos e pontas ficam redondos
+        rad = wp / 2
         path = QPainterPath()
         for i, v in enumerate(vals):
             x = area.left() + (i + frac) * step + step / 2
-            if x - w / 2 > area.right():
+            xl = round(x - wp / 2)
+            if xl > area.right():
                 break
-            h = max(w, 2 * v * hmax)
-            path.addRoundedRect(QRectF(x - w / 2, cy - h / 2, w, h), w / 2, w / 2)
+            h = max(wp, int(round(2 * v * hmax)))
+            top = round(cy - h / 2)
+            path.addRoundedRect(QRectF(xl, top, wp, h), rad, rad)
         p.drawPath(path)
         p.restore()
 
@@ -336,10 +367,13 @@ class Vinyl(Style):
             clip = QPainterPath()
             clip.addEllipse(c, rl, rl)
             p.save()
+            p.setRenderHint(p.RenderHint.SmoothPixmapTransform)
+            p.setRenderHint(p.RenderHint.Antialiasing)
             p.setClipPath(clip)
             p.translate(c)
             p.rotate(-ang)
-            p.drawImage(QRectF(-rl, -rl, 2 * rl, 2 * rl), img, _square_crop(img))
+            lab = scaled_square(img, math.ceil(2 * rl) + 2)
+            p.drawImage(QRectF(-rl, -rl, 2 * rl, 2 * rl), lab)
             p.restore()
             p.setBrush(Qt.NoBrush)
             p.drawEllipse(c, rl, rl)
@@ -366,6 +400,7 @@ class Vinyl(Style):
         p.restore()
 
     def _draw_cover(self, p, r: QRectF, prm, u, img):
+        r = QRectF(round(r.left()), round(r.top()), round(r.width()), round(r.width()))
         rad = prm["corner"] * u
         path = QPainterPath()
         path.addRoundedRect(r, rad, rad)
@@ -379,8 +414,8 @@ class Vinyl(Style):
                 p.fillPath(sp, QColor(0, 0, 0, int(255 * prm["shadow"] * 0.07)))
         p.setClipPath(path)
         if img is not None:
-            p.setRenderHint(p.RenderHint.SmoothPixmapTransform)
-            p.drawImage(r, img, _square_crop(img))
+            # posição e tamanho em pixels inteiros + imagem já reduzida = desenho 1:1, nítido
+            p.drawImage(r.topLeft(), scaled_square(img, int(r.width())))
         else:
             g = QLinearGradient(r.topLeft(), r.bottomRight())
             g.setColorAt(0, QColor("#3a3550"))

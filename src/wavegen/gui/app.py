@@ -37,7 +37,8 @@ from .preview import PreviewView
 from .tasks import Task
 from .widgets import ColorButton, ParamPanel, SliderSpin, StyleGallery
 
-PREVIEW_LONG_SIDE = 960
+PREVIEW_LONG_SIDE = 960          # mínimo; o preview acompanha o tamanho real do painel
+PREVIEW_MAX_SIDE = 1920
 
 
 def fmt_time(s: float) -> str:
@@ -203,6 +204,8 @@ class MainWindow(QMainWindow):
         self.preview = PreviewView()
         self.preview.boxChanged.connect(self._box_dragged)
         self.preview.boxEdited.connect(self._box_drag_done)
+        self.resize_timer = QTimer(self, singleShot=True, interval=200, timeout=self._preview_resized)
+        self.preview.resized.connect(self.resize_timer.start)
         cl.addWidget(self.preview, 1)
         tr = QHBoxLayout()
         self.btn_play = QToolButton()
@@ -1073,7 +1076,15 @@ class MainWindow(QMainWindow):
 
     def preview_size(self) -> tuple[int, int]:
         W, H = resolution(self.project.export.preset)
-        s = PREVIEW_LONG_SIDE / max(W, H)
+        # desenha o preview na resolução real do painel (sem esticar a imagem), limitado ao
+        # tamanho do vídeo final e a 1920 px para manter a reprodução leve
+        long_px = PREVIEW_LONG_SIDE
+        pw = self.preview.pixel_width() if hasattr(self, "preview") else 0
+        if pw > 0:
+            fw = pw if W >= H else pw * H / W
+            long_px = max(long_px, min(int(fw), PREVIEW_MAX_SIDE))
+        long_px = min(long_px, max(W, H))
+        s = long_px / max(W, H)
         return max(2, int(round(W * s / 2)) * 2), max(2, int(round(H * s / 2)) * 2)
 
     def _background(self, W, H) -> QImage:
@@ -1089,6 +1100,10 @@ class MainWindow(QMainWindow):
                     src = None
             self._bg_cache = {key: compose_background(src, W, H, bg, transparent)}
         return self._bg_cache[key]
+
+    def _preview_resized(self):
+        if self.comp is not None and (self.comp.W, self.comp.H) != self.preview_size():
+            self.schedule_rebuild()
 
     def rebuild_preview(self):
         if self.feats is None:

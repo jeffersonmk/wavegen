@@ -755,5 +755,59 @@ class TestPreviewPlayer(unittest.TestCase):
         pl.close()
 
 
+class TestVinylQuality(unittest.TestCase):
+    """Vinil com capa: barras com largura uniforme (alinhadas aos pixels) e capa nítida."""
+
+    @classmethod
+    def setUpClass(cls):
+        from PySide6.QtGui import QGuiApplication
+        cls.app = QGuiApplication.instance() or QGuiApplication([])
+
+    def test_bars_have_uniform_width(self):
+        from PySide6.QtCore import QRectF
+        from PySide6.QtGui import QImage, QPainter, Qt
+        from wavegen.styles import FrameData, get_style
+        st = get_style("vinyl")
+        prm = st.resolve({"show_title": False, "show_counter": False})
+        img = QImage(1000, 300, QImage.Format_ARGB32_Premultiplied)
+        for t in (10.0, 10.013, 10.051):                     # várias posições de rolagem
+            img.fill(Qt.transparent)
+            d = FrameData(t=t, n=0)
+            rng = np.random.default_rng(1)
+            d.envelope_from = lambda t0, win, k: rng.uniform(0.0, 1.0, k).astype(np.float32)
+            p = QPainter(img)
+            p.setRenderHint(QPainter.Antialiasing)
+            st._draw_wave(p, QRectF(300, 0, 680, 300), d, prm, 1.0, 300)
+            p.end()
+            al = np.frombuffer(img.constBits(), np.uint8).reshape(300, 1000, 4)[:, 300:980, 3]
+            full = (al > 250).sum(axis=0)                     # pixels opacos por coluna
+            runs, n, tall = [], 0, []
+            for h in full:
+                if h > 0:
+                    n += 1
+                    tall.append(h)
+                elif n:
+                    if max(tall) > 40:                        # só barras altas (não os pontos)
+                        runs.append(sum(1 for x in tall if x > 0.8 * max(tall)))
+                    n, tall = 0, []
+            runs = runs[1:-1]                                 # ignora barras cortadas nas bordas
+            self.assertGreater(len(runs), 8)
+            self.assertLessEqual(max(runs) - min(runs), 0, f"larguras {sorted(set(runs))}")
+
+    def test_cover_prescaled_with_area_filter(self):
+        from PySide6.QtGui import QColor, QImage
+        from wavegen.styles.vinyl import scaled_square
+        # xadrez 1 px: reduzido 8× deve virar cinza médio (sem serrilhado/moiré)
+        a = np.zeros((1200, 1600), np.uint8)
+        a[(np.indices(a.shape).sum(0) % 2) == 0] = 255
+        rgb = np.dstack([a, a, a, np.full_like(a, 255)])
+        big = QImage(rgb.tobytes(), 1600, 1200, 1600 * 4, QImage.Format_RGB32).copy()
+        out = scaled_square(big, 150)
+        self.assertEqual((out.width(), out.height()), (150, 150))
+        g = np.frombuffer(out.constBits(), np.uint8).reshape(150, 150, 4)[..., 0].astype(float)
+        self.assertLess(abs(g.mean() - 127.5), 6)
+        self.assertLess(g.std(), 6)
+
+
 if __name__ == "__main__":
     unittest.main()

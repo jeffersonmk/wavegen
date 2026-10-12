@@ -15,6 +15,7 @@ HANDLE = 7  # px na tela
 class PreviewView(QWidget):
     boxChanged = Signal(object)        # Box (durante o arraste)
     boxEdited = Signal()               # arraste terminou
+    resized = Signal()                 # tamanho do painel mudou (re-render na nova resolução)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -40,6 +41,14 @@ class PreviewView(QWidget):
         self.update()
 
     # ------------------------------------------------------------------ geometria
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        self.resized.emit()
+
+    def pixel_width(self) -> int:
+        """Largura real, em pixels da tela, da área onde o quadro aparece."""
+        return int(self.frame_rect().width() * self.devicePixelRatioF())
+
     def frame_rect(self) -> QRectF:
         W, H = self.width() - 16, self.height() - 16
         if W / max(H, 1) > self.frame_aspect:

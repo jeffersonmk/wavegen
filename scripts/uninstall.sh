@@ -11,7 +11,7 @@
 #   2. o app instalado               ~/.config/wavegen/app (código + ambiente Python)
 #   3. cache (trilhas e análises)    ~/.cache/wavegen
 #   4. preferências                  ~/.config/wavegen/settings.json
-#   5. a pasta do código-fonte       de onde o app foi instalado (ex.: ~/Projects/waveform)
+#   5. a pasta do código-fonte       de onde o app foi instalado (ex.: ~/Projects/wavegen)
 #
 # Nunca são removidos: os vídeos que você exportou, projetos .wavegen.json salvos fora das
 # pastas acima e os pacotes do sistema (ffmpeg, uv, portaudio).
