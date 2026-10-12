@@ -4,6 +4,14 @@ Fundo, vídeo e músicas são sintéticos (nada pessoal vai para o repositório)
 Uso: QT_QPA_PLATFORM=offscreen uv run python tests/readme_shots.py [PASTA]   (padrão docs/images)
 """
 
+import os as _os
+import tempfile as _tf
+# preferências e cache isolados: o teste nunca altera ~/.config/wavegen nem ~/.cache/wavegen
+_iso = _tf.mkdtemp(prefix="wavegen-iso-")
+_os.environ["XDG_CONFIG_HOME"] = _os.path.join(_iso, "config")
+_os.environ["XDG_CACHE_HOME"] = _os.path.join(_iso, "cache")
+
+
 import functools
 import subprocess
 import sys

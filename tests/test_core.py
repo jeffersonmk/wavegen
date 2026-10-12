@@ -18,6 +18,9 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+# preferências isoladas: os testes nunca alteram ~/.config/wavegen
+os.environ["XDG_CONFIG_HOME"] = tempfile.mkdtemp(prefix="wavegen-iso-")
+
 import numpy as np  # noqa: E402
 
 from wavegen import playlist  # noqa: E402
