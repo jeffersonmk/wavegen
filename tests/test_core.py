@@ -831,12 +831,13 @@ class TestVinylQuality(unittest.TestCase):
         from wavegen.styles import FrameData, get_style
         st = get_style("vinyl")
 
-        def render(mode):
-            prm = st.resolve({"text_bg": mode, "text_bg_opacity": 0.6, "text_shadow": False})
+        def render(mode, wave=False, env=0.0):
+            prm = st.resolve({"text_bg": mode, "text_bg_opacity": 0.6, "text_shadow": False,
+                              "text_bg_wave": wave})
             img = QImage(1200, 400, QImage.Format_ARGB32_Premultiplied)
             img.fill(QColor("#f4e8d0"))                       # fundo claro
             d = FrameData(t=30.0, n=900)
-            d.envelope_from = lambda t0, win, k: np.zeros(k, np.float32)
+            d.envelope_from = lambda t0, win, k: np.full(k, env, np.float32)
             d.track_title, d.track_index, d.track_count = "Faixa de teste", 1, 3
             d.track_pos, d.track_len, d.track_start = 30.0, 200.0, 0.0
             p = QPainter(img)
@@ -853,6 +854,15 @@ class TestVinylQuality(unittest.TestCase):
         self.assertLess(soft[changed].mean(), off[changed].mean() - 40)   # escurece
         self.assertLess(glass[changed].mean(), off[changed].mean() - 40)
         self.assertLess(changed[150:250].mean(), 0.05)        # faixa da onda quase intacta
+
+        # opção "cobre também o waveform": um só fundo, escurece a faixa da onda, mas as
+        # barras continuam brancas por cima (em destaque)
+        off_w, on_w = render("off", True, 0.6), render("soft", True, 0.6)
+        band = np.s_[180:220, 700:1100]
+        bars = off_w[band] > 245
+        self.assertGreater(bars.mean(), 0.05)
+        self.assertGreater(on_w[band][bars].mean(), 240)                       # barras brancas
+        self.assertLess(on_w[band][~bars].mean(), off_w[band][~bars].mean() - 40)  # fundo escuro
 
     def test_cover_prescaled_with_area_filter(self):
         from PySide6.QtGui import QColor, QImage

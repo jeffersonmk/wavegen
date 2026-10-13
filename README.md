@@ -203,7 +203,9 @@ De dentro da pasta do código, `uv run wavegen` também funciona.
   embaixo, tudo em cima ou tudo embaixo), tamanho, cores e sombra.
 - **Fundo atrás do texto**: escurece só a área do nome e do contador para o texto se destacar
   em capas e fundos claros. *Sombra suave* (esfumada, sem bordas; padrão), *Painel de vidro*
-  (cantos arredondados com brilho sutil) ou *Nenhum*, com opacidade e cor ajustáveis. O nome entra deslizando a
+  (cantos arredondados com brilho sutil) ou *Nenhum*, com opacidade e cor ajustáveis. Com “Fundo cobre
+  também o waveform” (padrão), nome, waveform e contador ficam num só painel, com o waveform
+  por cima, em destaque. O nome entra deslizando a
   cada troca de faixa, e nomes longos diminuem a fonte para caber.
 - **Waveform**: reage às batidas (picos, como nos vídeos de referência) ou ao volume.
 - Para um efeito de “green screen”, deixe o fundo sem imagem com a cor verde (aba Fundo), ou

@@ -133,6 +133,10 @@ class Vinyl(Style):
                   group="Nome e contador", suffix=""),
         ParamSpec("text_bg_color", "Cor do fundo do texto", "color", "#000000",
                   group="Nome e contador"),
+        ParamSpec("text_bg_wave", "Fundo cobre também o waveform", "bool", True,
+                  group="Nome e contador",
+                  tip="Um só fundo para nome, waveform e contador; o waveform fica por cima, "
+                      "em destaque"),
     ]
     default_box = (0.5, 0.5, 0.86, 0.65)
 
@@ -173,19 +177,33 @@ class Vinyl(Style):
 
         x0 = max(c.x() + R, cover.right()) + prm["wave_gap"] * u
         area = QRectF(x0, cover.top(), max(0.0, box.right() - x0), S)
+        text_area = area.adjusted(R * 0.12, 0, 0, 0)
+        has_text = prm["show_title"] or prm["show_counter"]
+        # fundo único (nome + waveform + contador) desenhado ANTES da onda: ela fica por cima
+        bg_with_wave = (has_text and prm["text_bg_wave"] and prm["text_bg"] != "off"
+                        and prm["text_bg_opacity"] > 0)
+        if bg_with_wave:
+            hmax = S * prm["wave_height"] / 2
+            band = QRectF(area.left(), area.center().y() - hmax * 0.75, area.width(), hmax * 1.5)
+            self._draw_text(p, text_area, d, prm, S, phase="bg", extra=band)
         self._draw_wave(p, area, d, prm, u, S)
         self._draw_disc(p, c, R, d.t, prm, img)
         self._draw_cover(p, cover, prm, u, img)
-        if prm["show_title"] or prm["show_counter"]:
-            self._draw_text(p, area.adjusted(R * 0.12, 0, 0, 0), d, prm, S)
+        if has_text:
+            self._draw_text(p, text_area, d, prm, S, phase="text" if bg_with_wave else "all")
 
     # ------------------------------------------------------------------ nome + contador
     @staticmethod
-    def _draw_text_bg(p, rects: list[QRectF], prm, S: float, area: QRectF):
+    def _draw_text_bg(p, rects: list[QRectF], prm, S: float, area: QRectF, single=False):
         """Escurece só a área do texto. Os pedaços próximos (número + nome, contador + barra)
         viram um bloco; cada bloco ganha uma sombra esfumada ou um painel de vidro."""
         rects = sorted(rects, key=lambda r: r.top())
         blocks: list[QRectF] = []
+        if single:                                   # um só fundo para tudo
+            u = QRectF(rects[0])
+            for r in rects[1:]:
+                u = u.united(r)
+            rects = [u]
         for r in rects:
             if blocks and r.top() <= blocks[-1].bottom() + S * 0.04:
                 blocks[-1] = blocks[-1].united(r)
@@ -240,7 +258,9 @@ class Vinyl(Style):
         h, m, s = sec // 3600, sec % 3600 // 60, sec % 60
         return f"{h}:{m:02d}:{s:02d}" if hours else f"{m:02d}:{s:02d}"
 
-    def _draw_text(self, p, area: QRectF, d, prm, S):
+    def _draw_text(self, p, area: QRectF, d, prm, S, phase="all", extra=None):
+        """phase: "all" = fundo + texto; "bg" = só o fundo (com a área ``extra`` incluída);
+        "text" = só o texto."""
         if area.width() < 40:
             return
         k = prm["text_size"]
@@ -305,8 +325,9 @@ class Vinyl(Style):
 
         p.save()
         p.setRenderHint(p.RenderHint.TextAntialiasing)
-        use_bg = prm["text_bg"] != "off" and prm["text_bg_opacity"] > 0
-        for measuring[0] in ((True, False) if use_bg else (False,)):
+        use_bg = prm["text_bg"] != "off" and prm["text_bg_opacity"] > 0 and phase != "text"
+        passes = (True,) if phase == "bg" else ((True, False) if use_bg else (False,))
+        for measuring[0] in passes:
             if not measuring[0] and rects:
                 self._draw_text_bg(p, rects, prm, S, area)
             if prm["show_title"]:
@@ -372,6 +393,10 @@ class Vinyl(Style):
                 else:
                     s = left_s + (f"  /  {right_s}" if right_s else "")
                     text(x, yb, s, f_small, col)
+        if phase == "bg" and (rects or extra is not None):
+            if extra is not None:
+                rects.append(extra)
+            self._draw_text_bg(p, rects, prm, S, area, single=True)
         p.restore()
 
     def _draw_wave(self, p, area: QRectF, d, prm, u, S):
