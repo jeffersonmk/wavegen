@@ -825,6 +825,35 @@ class TestVinylQuality(unittest.TestCase):
             self.assertGreater(len(runs), 8)
             self.assertLessEqual(max(runs) - min(runs), 0, f"larguras {sorted(set(runs))}")
 
+    def test_text_backdrop_darkens_only_text_area(self):
+        from PySide6.QtCore import QRectF
+        from PySide6.QtGui import QColor, QImage, QPainter
+        from wavegen.styles import FrameData, get_style
+        st = get_style("vinyl")
+
+        def render(mode):
+            prm = st.resolve({"text_bg": mode, "text_bg_opacity": 0.6, "text_shadow": False})
+            img = QImage(1200, 400, QImage.Format_ARGB32_Premultiplied)
+            img.fill(QColor("#f4e8d0"))                       # fundo claro
+            d = FrameData(t=30.0, n=900)
+            d.envelope_from = lambda t0, win, k: np.zeros(k, np.float32)
+            d.track_title, d.track_index, d.track_count = "Faixa de teste", 1, 3
+            d.track_pos, d.track_len, d.track_start = 30.0, 200.0, 0.0
+            p = QPainter(img)
+            p.setRenderHint(QPainter.Antialiasing)
+            st.draw(p, QRectF(0, 0, 1200, 400), d, prm, 1.0)
+            p.end()
+            return np.frombuffer(img.constBits(), np.uint8).reshape(400, 1200, 4)[..., :3].mean(-1)
+
+        off, soft, glass = render("off"), render("soft"), render("glass")
+        changed = np.abs(soft - off) > 8
+        ys, xs = np.nonzero(changed)
+        self.assertGreater(len(xs), 1000)
+        self.assertGreater(xs.min(), 400)                     # nada sobre a capa
+        self.assertLess(soft[changed].mean(), off[changed].mean() - 40)   # escurece
+        self.assertLess(glass[changed].mean(), off[changed].mean() - 40)
+        self.assertLess(changed[150:250].mean(), 0.05)        # faixa da onda quase intacta
+
     def test_cover_prescaled_with_area_filter(self):
         from PySide6.QtGui import QColor, QImage
         from wavegen.styles.vinyl import scaled_square

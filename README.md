@@ -200,7 +200,10 @@ De dentro da pasta do código, `uv run wavegen` também funciona.
 - **Nome e contador**: nome da música que está tocando (das tags, do nome do arquivo ou do
   título editado na Lista de faixas), número da faixa (01 / 12) e contador com barra de
   progresso: tempo/duração, tempo restante ou decorrido. Posição (nome em cima e contador
-  embaixo, tudo em cima ou tudo embaixo), tamanho, cores e sombra. O nome entra deslizando a
+  embaixo, tudo em cima ou tudo embaixo), tamanho, cores e sombra.
+- **Fundo atrás do texto**: escurece só a área do nome e do contador para o texto se destacar
+  em capas e fundos claros. *Sombra suave* (esfumada, sem bordas; padrão), *Painel de vidro*
+  (cantos arredondados com brilho sutil) ou *Nenhum*, com opacidade e cor ajustáveis. O nome entra deslizando a
   cada troca de faixa, e nomes longos diminuem a fonte para caber.
 - **Waveform**: reage às batidas (picos, como nos vídeos de referência) ou ao volume.
 - Para um efeito de “green screen”, deixe o fundo sem imagem com a cor verde (aba Fundo), ou

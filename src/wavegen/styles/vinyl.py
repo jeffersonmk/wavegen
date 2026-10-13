@@ -125,6 +125,14 @@ class Vinyl(Style):
         ParamSpec("text_shadow", "Sombra no texto", "bool", True, group="Nome e contador"),
         ParamSpec("title_anim", "Animar troca de faixa", "bool", True, group="Nome e contador",
                   tip="O nome entra deslizando quando a faixa muda"),
+        ParamSpec("text_bg", "Fundo atrás do texto", "choice", "soft", group="Nome e contador",
+                  choices=[("soft", "Sombra suave (esfumada)"), ("glass", "Painel de vidro"),
+                           ("off", "Nenhum")],
+                  tip="Escurece só a área do nome e do contador para o texto se destacar"),
+        ParamSpec("text_bg_opacity", "Opacidade do fundo do texto", "float", 0.45, 0.0, 0.9, 0.05,
+                  group="Nome e contador", suffix=""),
+        ParamSpec("text_bg_color", "Cor do fundo do texto", "color", "#000000",
+                  group="Nome e contador"),
     ]
     default_box = (0.5, 0.5, 0.86, 0.65)
 
@@ -173,6 +181,60 @@ class Vinyl(Style):
 
     # ------------------------------------------------------------------ nome + contador
     @staticmethod
+    def _draw_text_bg(p, rects: list[QRectF], prm, S: float, area: QRectF):
+        """Escurece só a área do texto. Os pedaços próximos (número + nome, contador + barra)
+        viram um bloco; cada bloco ganha uma sombra esfumada ou um painel de vidro."""
+        rects = sorted(rects, key=lambda r: r.top())
+        blocks: list[QRectF] = []
+        for r in rects:
+            if blocks and r.top() <= blocks[-1].bottom() + S * 0.04:
+                blocks[-1] = blocks[-1].united(r)
+            else:
+                blocks.append(QRectF(r))
+        # mesma largura para todos os blocos: forma uma coluna alinhada, mais harmoniosa
+        x0 = min(b.left() for b in blocks)
+        x1 = max(b.right() for b in blocks)
+        blocks = [QRectF(x0, b.top(), x1 - x0, b.height()) for b in blocks]
+        op = float(prm["text_bg_opacity"])
+        base = QColor(prm["text_bg_color"])
+        padx, pady = S * 0.035, S * 0.018
+        p.save()
+        p.setRenderHint(p.RenderHint.Antialiasing)
+        p.setPen(Qt.NoPen)
+        for b in blocks:
+            r = b.adjusted(-padx, -pady, padx, pady)
+            if prm["text_bg"] == "glass":
+                rad = min(r.height() / 2, S * 0.035)
+                c = QColor(base)
+                c.setAlphaF(op)
+                p.setBrush(c)
+                p.drawRoundedRect(r, rad, rad)
+                hl = QLinearGradient(r.topLeft(), r.bottomLeft())     # brilho sutil no topo
+                hl.setColorAt(0.0, QColor(255, 255, 255, int(28 * min(1.0, op * 2))))
+                hl.setColorAt(0.5, QColor(255, 255, 255, 0))
+                p.setBrush(hl)
+                p.drawRoundedRect(r, rad, rad)
+                p.setBrush(Qt.NoBrush)
+                p.setPen(QPen(QColor(255, 255, 255, int(40 * min(1.0, op * 2))), max(1.0, S * 0.0025)))
+                p.drawRoundedRect(r.adjusted(0.5, 0.5, -0.5, -0.5), rad, rad)
+                p.setPen(Qt.NoPen)
+            else:
+                # sombra esfumada: camadas sobrepostas, mais forte no centro e sumindo nas
+                # bordas, sem contorno visível — escurece sem "caixa"
+                n = 16
+                feather = S * 0.07
+                a1 = 1 - (1 - min(op, 0.95)) ** (1 / n)
+                c = QColor(base)
+                c.setAlphaF(a1)
+                p.setBrush(c)
+                for i in range(n):
+                    e = feather * (1 - i / (n - 1))
+                    rr = r.adjusted(-e, -e * 0.5, e, e * 0.5)
+                    rad = min(rr.height() / 2, S * 0.06)
+                    p.drawRoundedRect(rr, rad, rad)
+        p.restore()
+
+    @staticmethod
     def _fmt(sec: float, hours: bool) -> str:
         sec = max(0, int(sec))
         h, m, s = sec // 3600, sec % 3600 // 60, sec % 60
@@ -199,7 +261,14 @@ class Vinyl(Style):
                     pass
             return f
 
+        rects: list[QRectF] = []
+        measuring = [False]
+
         def text(x, y_base, s, f, c, alpha=1.0):
+            if measuring[0]:
+                fm = QFontMetricsF(f)
+                rects.append(QRectF(x, y_base - fm.ascent(), fm.horizontalAdvance(s), fm.height()))
+                return
             p.setFont(f)
             if prm["text_shadow"]:
                 sh = QColor(0, 0, 0, int(150 * alpha))
@@ -236,66 +305,73 @@ class Vinyl(Style):
 
         p.save()
         p.setRenderHint(p.RenderHint.TextAntialiasing)
-        if prm["show_title"]:
-            a, dx = 1.0, 0.0
-            if prm["title_anim"] and d.track_start > 0:          # não anima a 1ª faixa
-                ph = min(1.0, d.track_pos / 0.7)
-                e = 1 - (1 - ph) ** 3                         # ease-out
-                a, dx = e, (1 - e) * S * 0.12
-            if num_h:
-                num = f"{d.track_index:02d} / {d.track_count:02d}"
-                text(x + dx, y_title + fm_s.ascent(), num, f_small, acc, a)
-            # nome longo: diminui a fonte (até 60%) antes de cortar com "…"
-            ft, fmt = f_title, fm_t
-            tw = fm_t.horizontalAdvance(d.track_title)
-            if tw > wmax:
-                ft = font(f_title.pixelSize() * max(0.6, wmax / tw), QFont.Bold)
-                fmt = QFontMetricsF(ft)
-            title = fmt.elidedText(d.track_title, Qt.ElideRight, wmax)
-            base_y = y_title + num_h + fm_t.ascent() - (fm_t.ascent() - fmt.ascent()) * 0.5
-            text(x + dx, base_y, title, ft, col, a)
+        use_bg = prm["text_bg"] != "off" and prm["text_bg_opacity"] > 0
+        for measuring[0] in ((True, False) if use_bg else (False,)):
+            if not measuring[0] and rects:
+                self._draw_text_bg(p, rects, prm, S, area)
+            if prm["show_title"]:
+                a, dx = 1.0, 0.0
+                if prm["title_anim"] and d.track_start > 0:          # não anima a 1ª faixa
+                    ph = min(1.0, d.track_pos / 0.7)
+                    e = 1 - (1 - ph) ** 3                         # ease-out
+                    a, dx = e, (1 - e) * S * 0.12
+                if num_h:
+                    num = f"{d.track_index:02d} / {d.track_count:02d}"
+                    text(x + dx, y_title + fm_s.ascent(), num, f_small, acc, a)
+                # nome longo: diminui a fonte (até 60%) antes de cortar com "…"
+                ft, fmt = f_title, fm_t
+                tw = fm_t.horizontalAdvance(d.track_title)
+                if tw > wmax:
+                    ft = font(f_title.pixelSize() * max(0.6, wmax / tw), QFont.Bold)
+                    fmt = QFontMetricsF(ft)
+                title = fmt.elidedText(d.track_title, Qt.ElideRight, wmax)
+                base_y = y_title + num_h + fm_t.ascent() - (fm_t.ascent() - fmt.ascent()) * 0.5
+                text(x + dx, base_y, title, ft, col, a)
 
-        if prm["show_counter"]:
-            hours = d.track_len >= 3600
-            el, tot = d.track_pos, d.track_len
-            mode = prm["counter_mode"]
-            if mode == "remaining":
-                left_s, right_s = "-" + self._fmt(tot - el, hours), ""
-            elif mode == "elapsed":
-                left_s, right_s = self._fmt(el, hours), ""
-            else:
-                left_s, right_s = self._fmt(el, hours), self._fmt(tot, hours)
-            if not prm["show_title"] and num_h:
-                left_s = f"{d.track_index:02d}/{d.track_count:02d}   " + left_s
-            yb = y_cnt + fm_s.ascent()
-            if prm["show_progress"]:
-                bar_y = y_cnt + fm_s.height() * 0.5
-                lw = fm_s.horizontalAdvance(left_s) + S * 0.03
-                rw = (fm_s.horizontalAdvance(right_s) + S * 0.03) if right_s else 0.0
-                bx0, bx1 = x + lw, x + wmax - rw
-                if bx1 - bx0 < S * 0.15:                     # pouco espaço: barra embaixo
-                    bx0, bx1 = x, x + wmax
-                    bar_y = y_cnt + fm_s.height() * 1.45
-                    rw = 0.0
-                text(x, yb, left_s, f_small, col)
-                if right_s:
-                    rx = x + wmax - fm_s.horizontalAdvance(right_s)
-                    text(rx, yb, right_s, f_small, col, 0.75)
-                th = max(2.0, S * 0.012 * k)
-                frac = 0.0 if tot <= 0 else min(1.0, el / tot)
-                p.setPen(Qt.NoPen)
-                bg = QColor(col)
-                bg.setAlphaF(0.25)
-                p.setBrush(bg)
-                p.drawRoundedRect(QRectF(bx0, bar_y - th / 2, bx1 - bx0, th), th / 2, th / 2)
-                p.setBrush(acc)
-                fx = bx0 + (bx1 - bx0) * frac
-                p.drawRoundedRect(QRectF(bx0, bar_y - th / 2, max(th, fx - bx0), th), th / 2, th / 2)
-                p.setBrush(col)
-                p.drawEllipse(QPointF(fx, bar_y), th * 1.6, th * 1.6)
-            else:
-                s = left_s + (f"  /  {right_s}" if right_s else "")
-                text(x, yb, s, f_small, col)
+            if prm["show_counter"]:
+                hours = d.track_len >= 3600
+                el, tot = d.track_pos, d.track_len
+                mode = prm["counter_mode"]
+                if mode == "remaining":
+                    left_s, right_s = "-" + self._fmt(tot - el, hours), ""
+                elif mode == "elapsed":
+                    left_s, right_s = self._fmt(el, hours), ""
+                else:
+                    left_s, right_s = self._fmt(el, hours), self._fmt(tot, hours)
+                if not prm["show_title"] and num_h:
+                    left_s = f"{d.track_index:02d}/{d.track_count:02d}   " + left_s
+                yb = y_cnt + fm_s.ascent()
+                if prm["show_progress"]:
+                    bar_y = y_cnt + fm_s.height() * 0.5
+                    lw = fm_s.horizontalAdvance(left_s) + S * 0.03
+                    rw = (fm_s.horizontalAdvance(right_s) + S * 0.03) if right_s else 0.0
+                    bx0, bx1 = x + lw, x + wmax - rw
+                    if bx1 - bx0 < S * 0.15:                     # pouco espaço: barra embaixo
+                        bx0, bx1 = x, x + wmax
+                        bar_y = y_cnt + fm_s.height() * 1.45
+                        rw = 0.0
+                    text(x, yb, left_s, f_small, col)
+                    if right_s:
+                        rx = x + wmax - fm_s.horizontalAdvance(right_s)
+                        text(rx, yb, right_s, f_small, col, 0.75)
+                    th = max(2.0, S * 0.012 * k)
+                    if measuring[0]:
+                        rects.append(QRectF(bx0, bar_y - th * 1.6, bx1 - bx0, th * 3.2))
+                        continue
+                    frac = 0.0 if tot <= 0 else min(1.0, el / tot)
+                    p.setPen(Qt.NoPen)
+                    bg = QColor(col)
+                    bg.setAlphaF(0.25)
+                    p.setBrush(bg)
+                    p.drawRoundedRect(QRectF(bx0, bar_y - th / 2, bx1 - bx0, th), th / 2, th / 2)
+                    p.setBrush(acc)
+                    fx = bx0 + (bx1 - bx0) * frac
+                    p.drawRoundedRect(QRectF(bx0, bar_y - th / 2, max(th, fx - bx0), th), th / 2, th / 2)
+                    p.setBrush(col)
+                    p.drawEllipse(QPointF(fx, bar_y), th * 1.6, th * 1.6)
+                else:
+                    s = left_s + (f"  /  {right_s}" if right_s else "")
+                    text(x, yb, s, f_small, col)
         p.restore()
 
     def _draw_wave(self, p, area: QRectF, d, prm, u, S):
