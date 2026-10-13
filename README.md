@@ -166,7 +166,8 @@ De dentro da pasta do código, `uv run wavegen` também funciona.
    - Nada é deformado. Na aba **Fundo**: *Preencher a tela* (corta as sobras; ajuste a posição
      do recorte e o zoom) ou *Imagem inteira* (sem cortes; as sobras recebem o fundo
      desfocado ou uma cor). Também dá para escurecer o fundo.
-   - **Vídeo de fundo** toca sem som (o áudio é só o das músicas). Se for mais curto que a
+   - **Vídeo de fundo** fica sempre **mudo**: o som original do vídeo é removido e só as
+     músicas da playlist tocam (no preview e no vídeo final). Se for mais curto que a
      playlist, a opção **“Repetir em loop até a última faixa”** (aba Fundo, ligada por padrão)
      faz ele recomeçar até o fim; desligada, o último quadro fica parado. Se for mais longo, é
      cortado no fim da última música. O painel avisa qual caso se aplica.

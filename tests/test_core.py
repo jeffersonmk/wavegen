@@ -629,6 +629,34 @@ class TestVideoBackground(CacheIsolation):
         self.assertLess(abs(g[0] - g[2]), 4)
         self.assertGreater(abs(g[0] - g[3]), 15)
 
+    def test_video_sound_is_removed(self):
+        """O som original do vídeo de fundo nunca entra no vídeo final (só as músicas)."""
+        from wavegen.job import run_render
+        vid = TMP / "fundo com som.mp4"
+        subprocess.run([ffmpeg_path(), "-v", "error", "-y", "-f", "lavfi", "-i",
+                        "color=c=gray:s=320x240:r=24:d=3", "-f", "lavfi", "-i",
+                        "sine=f=1000:d=3,volume=4", "-c:v", "libx264", "-c:a", "aac",
+                        "-shortest", media_arg(vid)], check=True)
+        music = make_tone("musica 220.wav", 4.0, 220, 0.5)
+        p = Project()
+        p.tracks = [load(music)]
+        p.background.image = str(vid)
+        p.style = "bars"
+        p.export.preset = "720p"
+        out = TMP / "sem som do video.mp4"
+        run_render(p, out, lambda e: None, threading.Event(), workers=1)
+        streams = probe_streams(out)["streams"]
+        self.assertEqual(sum(1 for s in streams if s["codec_type"] == "audio"), 1)
+        r = subprocess.run([ffmpeg_path(), "-v", "error", "-i", media_arg(out), "-map", "0:a",
+                            "-ac", "1", "-ar", "48000", "-f", "f32le", "-"],
+                           capture_output=True, check=True)
+        a = np.frombuffer(r.stdout, np.float32)
+        sp = np.abs(np.fft.rfft(a))
+        fr = np.fft.rfftfreq(len(a), 1 / 48000)
+        band = lambda hz: sp[(fr > hz - 20) & (fr < hz + 20)].sum() / sp.sum()  # noqa: E731
+        self.assertLess(band(1000), 0.005)          # apito do vídeo: ausente
+        self.assertGreater(band(220), 0.5)          # música: presente
+
     def test_preview_decoder_matches_grid(self):
         from wavegen.project import BackgroundSettings
         from wavegen.video import VideoDecoder

@@ -442,6 +442,11 @@ class MainWindow(QMainWindow):
         self.bg_loop.setEnabled(False)
         self.bg_loop.toggled.connect(lambda v: self.set_bg("loop_video", v))
         f.addRow("Vídeo de fundo", self.bg_loop)
+        self.bg_mute = QLabel("🔇 Mudo: o som original do vídeo é removido; no vídeo final só "
+                              "tocam as músicas da playlist")
+        self.bg_mute.setWordWrap(True)
+        self.bg_mute.setStyleSheet("color:#9ccc65")
+        f.addRow("Som do vídeo", self.bg_mute)
         note = QLabel("A imagem nunca é deformada: em “Preencher”, as sobras são cortadas (ajuste a "
                       "posição para escolher o recorte); em “Imagem inteira”, as faixas vazias são "
                       "preenchidas. A imagem fica estática durante todo o vídeo; um vídeo de fundo toca sem som "
@@ -873,7 +878,8 @@ class MainWindow(QMainWindow):
                 elif total and vi.duration > total + 0.05:
                     msgs.append("O vídeo é mais longo que as músicas: será cortado no fim da última faixa.")
                 if vi.has_audio:
-                    msgs.append("O som do vídeo não é usado (só as músicas da playlist).")
+                    msgs.append("🔇 Este vídeo tem som próprio: ele será removido (mudo); "
+                                "só as músicas da playlist tocam.")
             except WavegenError as e:
                 msgs.append(f"<span style='color:#ff8a80'>{e.message}</span>")
         iar, var = img.width() / img.height(), W / H
