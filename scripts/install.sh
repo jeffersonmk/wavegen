@@ -21,13 +21,14 @@ CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/wavegen"
 DEST="$CONFIG/app"
 DATA="${XDG_DATA_HOME:-$HOME/.local/share}"
 APPS="$DATA/applications"
-ICONS="$DATA/icons/hicolor/scalable/apps"
+ICONS="$DATA/icons/hicolor/512x512/apps"
+OLD_ICONS="$DATA/icons/hicolor/scalable/apps"
 
 case "${1:-}" in
     --here) DEST="$SRC" ;;
     --dest) DEST="$(realpath -m "${2:?informe a pasta depois de --dest}")" ;;
     --remove)
-        rm -f "$APPS/wavegen.desktop" "$ICONS/wavegen.svg"
+        rm -f "$APPS/wavegen.desktop" "$ICONS/wavegen.png" "$OLD_ICONS/wavegen.svg"
         command -v update-desktop-database >/dev/null && update-desktop-database "$APPS" 2>/dev/null || true
         echo "Atalho removido. (Para remover tudo: ./scripts/uninstall.sh)"
         exit 0 ;;
@@ -85,7 +86,8 @@ echo "2/3 Preparando o ambiente Python (uv sync)…"
 # ---------------------------------------------------------------- 3. atalho
 echo "3/3 Criando o atalho no menu…"
 mkdir -p "$APPS" "$ICONS"
-cp "$DEST/data/wavegen.svg" "$ICONS/wavegen.svg"
+rm -f "$ICONS/wavegen.svg" "$OLD_ICONS/wavegen.svg"     # ícone antigo (versões anteriores)
+cp "$DEST/data/wavegen.png" "$ICONS/wavegen.png"
 cat > "$APPS/wavegen.desktop" <<EOF
 [Desktop Entry]
 Type=Application
@@ -93,7 +95,7 @@ Name=Wavegen
 GenericName=Vídeos musicais com waveform
 Comment=Imagem ou vídeo + músicas → vídeo com visualizador de áudio para o YouTube
 Exec="$DEST/.venv/bin/wavegen" %F
-Icon=$ICONS/wavegen.svg
+Icon=$ICONS/wavegen.png
 Terminal=false
 Categories=AudioVideo;Video;
 MimeType=application/json;

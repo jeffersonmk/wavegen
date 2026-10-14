@@ -7,7 +7,7 @@
 #
 # O que pode ser removido:
 #   1. atalho do menu e ícone        ~/.local/share/applications/wavegen.desktop
-#                                    ~/.local/share/icons/hicolor/scalable/apps/wavegen.svg
+#                                    ~/.local/share/icons/hicolor/512x512/apps/wavegen.png
 #   2. o app instalado               ~/.config/wavegen/app (código + ambiente Python)
 #   3. cache (trilhas e análises)    ~/.cache/wavegen
 #   4. preferências                  ~/.config/wavegen/settings.json
@@ -96,7 +96,8 @@ main() {
     local removed=()
 
     if confirm "1. Remover o atalho e o ícone do menu?"; then
-        rm -f "$data/applications/wavegen.desktop" "$data/icons/hicolor/scalable/apps/wavegen.svg"
+        rm -f "$data/applications/wavegen.desktop" "$data/icons/hicolor/512x512/apps/wavegen.png" \
+              "$data/icons/hicolor/scalable/apps/wavegen.svg"
         command -v update-desktop-database >/dev/null && update-desktop-database "$data/applications" 2>/dev/null || true
         command -v gtk-update-icon-cache >/dev/null && gtk-update-icon-cache -f -t "$data/icons/hicolor" >/dev/null 2>&1 || true
         removed+=("atalho e ícone")

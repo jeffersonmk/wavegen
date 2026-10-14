@@ -1,3 +1,5 @@
+<p align="center"><img src="data/wavegen.png" width="160" alt="Ícone do Wavegen"></p>
+
 # Wavegen — vídeos musicais com waveform animado
 
 Aplicativo para Linux que junta **uma imagem ou um vídeo + uma ou mais músicas** e gera um
@@ -108,7 +110,8 @@ Seus projetos `.wavegen.json`, preferências e cache continuam valendo.
 
 - **Preciso apagar o cache?** Não. Ele se refaz sozinho quando muda. Se algo parecer estranho,
   use **Ajuda → Limpar cache de áudio**.
-- **O ícone do menu não mudou:** saia e entre de novo na sessão.
+- **O ícone do menu não mudou** (por exemplo, ao atualizar para a versão com o ícone novo):
+  saia e entre de novo na sessão.
 - **Deu erro de biblioteca ao abrir:** apague o ambiente Python do app e instale de novo:
   ```bash
   rm -rf ~/.config/wavegen/app/.venv
@@ -297,6 +300,17 @@ Medido num PC com RX 9060 XT, trilha de 7min26s em 1080p30: **CPU 2min34s (155 M
 - *Pouco espaço em disco*: o app verifica antes de começar e avisa.
 - *Arquivo corrompido ou não suportado*: o arquivo não entra e o motivo é mostrado.
 - O cache das trilhas montadas fica em `~/.cache/wavegen` (**Ajuda → Limpar cache de áudio**).
+
+## Ícone
+
+O ícone do app é um círculo azul com barras de espectro e uma onda
+([`data/wavegen.png`](data/wavegen.png), 512×512 com fundo transparente). Ele substituiu o
+ícone anterior (`wavegen.svg`). O instalador coloca o ícone em
+`~/.local/share/icons/hicolor/512x512/apps/wavegen.png` e remove o ícone antigo das versões
+anteriores. A arte original, em 1024×1024, fica em `data/wavegen-original.png`.
+
+Para trocar o ícone: substitua `data/wavegen.png` e `src/wavegen/gui/wavegen.png` (ícone da
+janela) por uma imagem PNG quadrada e rode `./scripts/install.sh` de novo.
 
 ## Para desenvolvedores
 

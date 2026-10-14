@@ -1694,7 +1694,7 @@ def main(argv=None):
     app.setApplicationName("Wavegen")
     app.setOrganizationName("wavegen")
     app.setDesktopFileName("wavegen")
-    app.setWindowIcon(QIcon(str(Path(__file__).with_name("wavegen.svg"))))
+    app.setWindowIcon(QIcon(str(Path(__file__).with_name("wavegen.png"))))
     setup_theme(app)
     args = [a for a in (sys.argv[1:] if argv is None else argv[1:]) if not a.startswith("-")]
     w = MainWindow(args[0] if args else None)
