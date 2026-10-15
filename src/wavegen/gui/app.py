@@ -30,6 +30,7 @@ from ..ffmpeg import WavegenError, check_vaapi, encoders, ffmpeg_path, ffmpeg_ve
 from ..playlist import AUDIO_EXTS, CACHE_DIR, Track, ensure_mix, open_pcm, total_duration, ordered
 from ..project import Box, Project, load_prefs, save_prefs
 from ..styles import get_style, style_list
+from ..subscribe import LANGUAGES, POSITIONS, schedule
 from .demo import SR as DEMO_SR
 from .demo import demo_features, demo_pcm
 from .player import AudioPlayer
@@ -243,7 +244,7 @@ class MainWindow(QMainWindow):
 
         # ---------------- direita: abas
         self.tabs = QTabWidget()
-        self.tabs.setMinimumWidth(430)
+        self.tabs.setMinimumWidth(480)
         # estilos
         ts = QWidget()
         tsl = QVBoxLayout(ts)
@@ -276,6 +277,7 @@ class MainWindow(QMainWindow):
         self._build_behavior_controls()
         self.tabs.addTab(self._build_background_tab(), "Fundo")
         self.tabs.addTab(self._build_audio_tab(), "Áudio")
+        self.tabs.addTab(self._build_subscribe_tab(), "Inscreva-se")
         self.tabs.addTab(self._build_export_tab(), "5 · Exportar")
 
         split = QSplitter(Qt.Horizontal)
@@ -285,7 +287,7 @@ class MainWindow(QMainWindow):
         split.setStretchFactor(0, 0)
         split.setStretchFactor(1, 1)
         split.setStretchFactor(2, 0)
-        split.setSizes([330, 760, 450])
+        split.setSizes([330, 740, 490])
         self.splitter = split
 
         # ---------------- rodapé: renderização
@@ -494,6 +496,128 @@ class MainWindow(QMainWindow):
         f.addRow(note)
         return w
 
+    # ------------------------------------------------------------------ inscreva-se
+    def _build_subscribe_tab(self) -> QWidget:
+        w = QWidget()
+        f = QFormLayout(w)
+        self.sub_on = QCheckBox("Mostrar animação de inscrever-se no vídeo")
+        self.sub_on.setToolTip("Botão de inscrição + sino, com cursor clicando. Aparece por cima de "
+                               "qualquer estilo, no preview e no vídeo final.")
+        self.sub_on.toggled.connect(lambda v: self.set_sub("enabled", v))
+        f.addRow(self.sub_on)
+
+        self.sub_lang = QComboBox()
+        for code, (name, a, b) in LANGUAGES.items():
+            self.sub_lang.addItem(name if code == "custom" else f"{name} — {a}", code)
+        self.sub_lang.currentIndexChanged.connect(
+            lambda _: self.set_sub("lang", self.sub_lang.currentData()))
+        f.addRow("Idioma do texto", self.sub_lang)
+        self.sub_text = QLineEdit()
+        self.sub_text.setPlaceholderText("Texto do botão (ex.: SIGA O CANAL)")
+        self.sub_text.editingFinished.connect(lambda: self.set_sub("text", self.sub_text.text()))
+        self.sub_text_done = QLineEdit()
+        self.sub_text_done.setPlaceholderText("Depois do clique (ex.: SEGUINDO)")
+        self.sub_text_done.editingFinished.connect(
+            lambda: self.set_sub("text_done", self.sub_text_done.text()))
+        f.addRow("Texto personalizado", self.sub_text)
+        f.addRow("", self.sub_text_done)
+
+        self.sub_first = SliderSpin(0, 600, 5, 30, decimals=0, suffix=" s")
+        self.sub_first.setToolTip("Quando aparece pela primeira vez, contando do início do vídeo")
+        self.sub_first.valueChanged.connect(lambda v: self.set_sub("first", v))
+        f.addRow("Primeira aparição", self.sub_first)
+        self.sub_every = SliderSpin(0, 60, 0.5, 10, decimals=1, suffix=" min")
+        self.sub_every.setToolTip("Intervalo entre as aparições. 0 = aparece só uma vez")
+        self.sub_every.valueChanged.connect(lambda v: self.set_sub("interval", v * 60))
+        f.addRow("Repetir a cada", self.sub_every)
+        self.sub_dur = SliderSpin(3, 12, 0.5, 6, decimals=1, suffix=" s")
+        self.sub_dur.setToolTip("Quanto tempo cada aparição fica na tela (a animação acompanha)")
+        self.sub_dur.valueChanged.connect(lambda v: self.set_sub("duration", v))
+        f.addRow("Duração", self.sub_dur)
+        self.sub_end = QCheckBox("Aparecer também no final do vídeo")
+        self.sub_end.toggled.connect(lambda v: self.set_sub("at_end", v))
+        f.addRow("", self.sub_end)
+
+        self.sub_pos = QComboBox()
+        for code, name in POSITIONS:
+            self.sub_pos.addItem(name, code)
+        self.sub_pos.currentIndexChanged.connect(
+            lambda _: self.set_sub("position", self.sub_pos.currentData()))
+        f.addRow("Posição", self.sub_pos)
+        self.sub_size = SliderSpin(0.5, 2.0, 0.05, 1.0, decimals=2)
+        self.sub_size.valueChanged.connect(lambda v: self.set_sub("size", v))
+        f.addRow("Tamanho", self.sub_size)
+        self.sub_color = ColorButton("#e62117")
+        self.sub_color.colorChanged.connect(lambda c: self.set_sub("color", c))
+        f.addRow("Cor do botão", self.sub_color)
+        self.sub_bell = QCheckBox("Sino de notificações")
+        self.sub_bell.toggled.connect(lambda v: self.set_sub("bell", v))
+        self.sub_cursor = QCheckBox("Cursor clicando")
+        self.sub_cursor.toggled.connect(lambda v: self.set_sub("cursor", v))
+        row = QHBoxLayout()
+        row.addWidget(self.sub_bell)
+        row.addWidget(self.sub_cursor)
+        row.addStretch(1)
+        f.addRow("Mostrar", row)
+
+        self.sub_info = QLabel()
+        self.sub_info.setWordWrap(True)
+        self.sub_info.setStyleSheet("color:#9aa0a6")
+        f.addRow(self.sub_info)
+        b = QPushButton("▶ Ver a próxima aparição no preview")
+        b.clicked.connect(self._sub_jump)
+        f.addRow(b)
+        self.sub_controls = [self.sub_lang, self.sub_text, self.sub_text_done, self.sub_first,
+                             self.sub_every, self.sub_dur, self.sub_end, self.sub_pos,
+                             self.sub_size, self.sub_color, self.sub_bell, self.sub_cursor, b]
+        return w
+
+    def set_sub(self, key, value):
+        if self._loading:
+            return
+        setattr(self.project.subscribe, key, value)
+        self.mark_dirty()
+        self._sub_refresh()
+        self.schedule_rebuild()
+
+    def _sub_starts(self) -> list[float]:
+        total = self.feats.duration if (self.feats is not None and not self.using_demo) else 0.0
+        return schedule(self.project.subscribe, float(total)) if total else []
+
+    def _sub_refresh(self):
+        s = self.project.subscribe
+        for c in self.sub_controls:
+            c.setEnabled(s.enabled)
+        custom = s.lang == "custom"
+        self.sub_text.setVisible(custom)
+        self.sub_text_done.setVisible(custom)
+        lbl = self.sub_text.parentWidget().layout().labelForField(self.sub_text)
+        if lbl is not None:
+            lbl.setVisible(custom)
+        if not s.enabled:
+            self.sub_info.setText("Desligada.")
+            return
+        starts = self._sub_starts()
+        if self.using_demo or self.feats is None:
+            self.sub_info.setText("Adicione as músicas para ver quando a animação vai aparecer.")
+        elif not starts:
+            self.sub_info.setText("⚠ Não cabe nenhuma aparição: o vídeo é mais curto que a primeira "
+                                  "aparição + duração.")
+        else:
+            ts = ", ".join(fmt_time(t) for t in starts[:12]) + (" …" if len(starts) > 12 else "")
+            self.sub_info.setText(f"Vai aparecer {len(starts)}× no vídeo: {ts}")
+
+    def _sub_jump(self):
+        starts = self._sub_starts()
+        if not starts:
+            return
+        now = self.player.position() / self.sr
+        nxt = next((t for t in starts if t > now + 0.5), starts[0])
+        self.player.seek(int(max(0.0, nxt - 0.3) * self.sr))
+        self._render_current(force=True)
+        if not self.player.playing:
+            self.toggle_play()
+
     # ------------------------------------------------------------------ exportar
     def _build_export_tab(self) -> QWidget:
         w = QWidget()
@@ -673,8 +797,23 @@ class MainWindow(QMainWindow):
         self.e_dir.setText(ex.out_dir)
         self.e_name.setText(ex.filename)
         self.e_tracklist.setChecked(ex.save_tracklist)
+        su = p.subscribe
+        self.sub_on.setChecked(su.enabled)
+        self.sub_lang.setCurrentIndex(max(0, self.sub_lang.findData(su.lang)))
+        self.sub_text.setText(su.text)
+        self.sub_text_done.setText(su.text_done)
+        self.sub_first.set_value(su.first)
+        self.sub_every.set_value(su.interval / 60)
+        self.sub_dur.set_value(su.duration)
+        self.sub_end.setChecked(su.at_end)
+        self.sub_pos.setCurrentIndex(max(0, self.sub_pos.findData(su.position)))
+        self.sub_size.set_value(su.size)
+        self.sub_color.set_color(su.color)
+        self.sub_bell.setChecked(su.bell)
+        self.sub_cursor.setChecked(su.cursor)
         self.gallery.select(p.style)
         self._loading = False
+        self._sub_refresh()
         self._refresh_image_info()
         self._refresh_playlist()
         self._build_param_panel()
@@ -1073,6 +1212,7 @@ class MainWindow(QMainWindow):
         self.player.seek(int(min(t_sec, feats.duration) * sr))
         self.time_slider.setRange(0, max(0, feats.n_frames - 1))
         self.rebuild_preview()
+        self._sub_refresh()
         if was_playing:
             self.toggle_play()
 

@@ -9,6 +9,7 @@ from pathlib import Path
 
 from .analysis import Response
 from .playlist import AudioSettings, Track
+from .subscribe import SubscribeSettings
 
 PROJECT_VERSION = 1
 CONFIG_DIR = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "wavegen"
@@ -72,6 +73,7 @@ class Project:
     boxes: dict[str, Box] = field(default_factory=dict)            # posição por estilo
     response: Response = field(default_factory=Response)
     export: ExportSettings = field(default_factory=ExportSettings)
+    subscribe: SubscribeSettings = field(default_factory=SubscribeSettings)
 
     # --- acesso conveniente ----------------------------------------------
     def params_for(self, style_id: str | None = None) -> dict:
@@ -100,6 +102,7 @@ class Project:
             "boxes": {k: asdict(v) for k, v in self.boxes.items()},
             "response": asdict(self.response),
             "export": asdict(self.export),
+            "subscribe": asdict(self.subscribe),
         }
 
     @classmethod
@@ -115,6 +118,7 @@ class Project:
         p.boxes = {k: Box.from_dict(v) for k, v in (d.get("boxes") or {}).items()}
         p.response = Response.from_dict(d.get("response", {}))
         p.export = ExportSettings.from_dict(d.get("export", {}))
+        p.subscribe = SubscribeSettings.from_dict(d.get("subscribe", {}))
         return p
 
     def save(self, path: str | Path) -> None:

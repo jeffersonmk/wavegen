@@ -17,6 +17,8 @@ como sobreposição no DaVinci Resolve (Free ou Studio).
 - **11 estilos de visualizador**, todos personalizáveis (cores, gradiente, tamanho, brilho…),
   com posição e tamanho ajustáveis arrastando na pré-visualização.
 - **Vinil com capa**: capa personalizada, disco girando e **nome da faixa com contador**.
+- **Animação “Inscreva-se”** opcional: botão + sino com cursor clicando, em 9 idiomas ou
+  texto próprio, aparecendo de tempos em tempos no vídeo.
 - **Pré-visualização com som**, sincronizada com a animação.
 - **Lista de faixas com os tempos** pronta para a descrição do YouTube (capítulos).
 - **Exportação** em 720p, 1080p, 4K, vertical ou quadrado; CPU ou GPU AMD (VAAPI);
@@ -214,6 +216,28 @@ De dentro da pasta do código, `uv run wavegen` também funciona.
 - Para um efeito de “green screen”, deixe o fundo sem imagem com a cor verde (aba Fundo), ou
   exporte em formato transparente para o Resolve.
 
+### Animação “Inscreva-se”
+
+<img src="docs/images/08-inscreva-se.jpg" width="420" alt="Animação Inscreva-se">
+
+Aba **Inscreva-se** → marque **“Mostrar animação de inscrever-se no vídeo”**. O botão entra na
+tela, o cursor clica nele (ele fica cinza com ✓ “Inscrito”), depois clica no sino (que balança)
+e tudo some. Funciona com qualquer estilo e aparece igual no preview e no vídeo final.
+
+| Opção | O que faz |
+|---|---|
+| Idioma do texto | Português, English, Español, Français, Deutsch, Italiano, Русский, 日本語, 한국어 ou **Personalizado** (você escreve o texto do botão e o texto depois do clique) |
+| Primeira aparição | quantos segundos depois do início aparece pela 1ª vez (padrão 30 s) |
+| Repetir a cada | intervalo entre as aparições, em minutos (padrão 10 min; **0 = só uma vez**) |
+| Duração | quanto tempo cada aparição fica na tela (3 a 12 s; padrão 6 s) |
+| Aparecer também no final | mostra mais uma vez nos últimos segundos do vídeo |
+| Posição, tamanho, cor | 6 posições (cantos, centro embaixo, centro), tamanho e cor do botão |
+| Mostrar | liga/desliga o sino e o cursor |
+
+Embaixo das opções o app mostra **quantas vezes e em quais tempos** a animação vai aparecer, e o
+botão **“Ver a próxima aparição no preview”** pula direto para ela. Uma aparição só entra se
+couber inteira no vídeo.
+
 ### Lista de faixas para o YouTube
 
 O botão **“Lista de faixas para o YouTube…”** (embaixo da lista de músicas, ou no menu Arquivo)
@@ -316,7 +340,7 @@ janela) por uma imagem PNG quadrada e rode `./scripts/install.sh` de novo.
 
 ```bash
 uv run wavegen                                         # roda direto da pasta do código
-uv run python -m unittest discover -s tests -v         # 49 testes (~15 s)
+uv run python -m unittest discover -s tests -v         # 58 testes (~20 s)
 QT_QPA_PLATFORM=offscreen uv run python tests/gui_smoke.py PASTA_SAIDA IMAGEM AUDIO...  # interface
 QT_QPA_PLATFORM=offscreen uv run python tests/readme_shots.py   # refaz as imagens do README
 ```
@@ -326,7 +350,7 @@ amostra igual ao original (sem silêncio extra, sem normalização), fades/volum
 (cliques caem no quadro certo a 30/60 fps), determinismo (1 processo = N processos, quadro a
 quadro), estilos diferentes entre si e reagindo ao áudio, preview proporcional ao vídeo final,
 parâmetros do FFmpeg (caminhos com espaços, `-` e `:`), renderização real de MP4 (streams,
-duração, áudio = vídeo), fundo em vídeo com e sem loop, nome/contador da faixa certa,
+duração, áudio = vídeo), fundo em vídeo com e sem loop, animação Inscreva-se (agenda e quadros), nome/contador da faixa certa,
 lista de faixas, cancelamento sem arquivo parcial e projeto salvo/carregado.
 
 As imagens em `docs/images/` são geradas por `tests/readme_shots.py` com fundo, vídeo e
@@ -339,6 +363,7 @@ src/wavegen/
   analysis.py    análise do áudio (256 bandas, nível, envoltória) + suavização determinística
   styles/        biblioteca de estilos (base.py, spectrum.py, waves.py, vinyl.py)
   compositor.py  fundo + visualizador num quadro (o mesmo código no preview e na exportação)
+  subscribe.py   animação “Inscreva-se” (textos, agenda das aparições, desenho)
   video.py       vídeo de fundo: sondagem, enquadramento, loop, leitura para o preview
   tracklist.py   tempos de cada faixa no vídeo (lista para o YouTube, nome/contador)
   export.py      predefinições, comando de codificação, estimativa de tamanho

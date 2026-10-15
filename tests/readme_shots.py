@@ -27,7 +27,7 @@ OUT = Path(sys.argv[1] if len(sys.argv) > 1 else "docs/images")
 OUT.mkdir(parents=True, exist_ok=True)
 TMP = Path(tempfile.mkdtemp(prefix="wavegen-shots-"))
 
-from PySide6.QtCore import QEventLoop, QPointF, QTimer, Qt  # noqa: E402
+from PySide6.QtCore import QEventLoop, QPointF, QRect, QTimer, Qt  # noqa: E402
 from PySide6.QtGui import QColor, QImage, QPainter, QRadialGradient, QLinearGradient  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
@@ -239,4 +239,17 @@ pr.style_params["vinyl"] = {"cover": str(cover)}
 Compositor(pr, 1920, 1080, feats, pcm).render(int(118 * 30)).scaledToWidth(
     1280, Qt.SmoothTransformation).save(str(OUT / "07-resultado-vinil.jpg"), quality=88)
 print("imagem:", OUT / "07-resultado-vinil.jpg")
+
+# 8. animação "Inscreva-se": três momentos (antes do clique, inscrito + sino, saindo)
+pr.subscribe.enabled = True
+pr.subscribe.first = 100.0
+c = Compositor(pr, 1920, 1080, feats, pcm)
+crop = QRect(0, 760, 960, 320)
+strip = QImage(960, 320 * 3, QImage.Format_RGB32)
+p = QPainter(strip)
+for i, sec in enumerate((101.2, 102.9, 104.3)):
+    p.drawImage(0, i * 320, c.render(int(sec * 30)).copy(crop))
+p.end()
+strip.scaledToWidth(640, Qt.SmoothTransformation).save(str(OUT / "08-inscreva-se.jpg"), quality=88)
+print("imagem:", OUT / "08-inscreva-se.jpg")
 app.quit()

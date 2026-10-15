@@ -18,6 +18,8 @@ from .analysis import Features, SeriesProvider, envelope_window, scope
 from .ffmpeg import WavegenError, ffmpeg_path, media_arg
 from .project import BackgroundSettings, Box, Project
 from .styles import FrameData, get_style
+from .subscribe import active_start, schedule
+from .subscribe import draw as draw_subscribe
 from .video import is_video
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"}
@@ -124,6 +126,8 @@ class Compositor:
         self.prm["_project_image"] = "" if is_video(img) else img
         self.box = project.box_for()
         self._init_tracks(project)
+        self.sub = project.subscribe
+        self.sub_starts = schedule(self.sub, float(feats.duration))
         self.resp = project.response
         self.u = min(W, H) / 1080.0
         self.gain = 10 ** (self.resp.sensitivity_db / 20)
@@ -205,5 +209,11 @@ class Compositor:
             p.setCompositionMode(QPainter.CompositionMode_SourceOver)
         p.setOpacity(opacity)
         p.drawImage(0, 0, self.layer)
+        if self.sub_starts:                       # animação "Inscreva-se" (por cima de tudo)
+            t = n * self.feats.fps.denominator / self.feats.fps.numerator
+            a = active_start(self.sub_starts, t, max(1.0, self.sub.duration))
+            if a is not None:
+                p.setOpacity(1.0)
+                draw_subscribe(p, self.W, self.H, t, a, self.sub)
         p.end()
         return frame

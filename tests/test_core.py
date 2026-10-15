@@ -879,5 +879,64 @@ class TestVinylQuality(unittest.TestCase):
         self.assertLess(g.std(), 6)
 
 
+# ============================================================================ inscreva-se
+class TestSubscribe(unittest.TestCase):
+    def test_schedule(self):
+        from wavegen.subscribe import SubscribeSettings, schedule
+        s = SubscribeSettings(enabled=True, first=30, interval=600, duration=6)
+        self.assertEqual(schedule(s, 1900), [30, 630, 1230, 1830])
+        self.assertEqual(schedule(s, 1835), [30, 630, 1230])          # 1830+6 não cabe
+        self.assertEqual(schedule(SubscribeSettings(enabled=False), 1900), [])
+        once = SubscribeSettings(enabled=True, first=10, interval=0, duration=6)
+        self.assertEqual(schedule(once, 1000), [10])
+        end = SubscribeSettings(enabled=True, first=30, interval=0, duration=6, at_end=True)
+        self.assertEqual(schedule(end, 300), [30, 293])
+        self.assertEqual(schedule(end, 20), [13])                      # só a do final cabe
+        self.assertEqual(schedule(SubscribeSettings(enabled=True, first=30), 20), [])
+
+    def test_texts_and_project_roundtrip(self):
+        from wavegen.subscribe import LANGUAGES, SubscribeSettings
+        self.assertEqual(SubscribeSettings(lang="en").texts(), ("SUBSCRIBE", "SUBSCRIBED"))
+        self.assertEqual(SubscribeSettings(lang="custom", text="SIGA").texts(), ("SIGA", "SIGA"))
+        self.assertIn("ja", LANGUAGES)
+        p = Project()
+        p.subscribe.enabled, p.subscribe.lang, p.subscribe.interval = True, "es", 300.0
+        q = Project.from_dict(json.loads(json.dumps(p.to_dict())))
+        self.assertEqual((q.subscribe.enabled, q.subscribe.lang, q.subscribe.interval),
+                         (True, "es", 300.0))
+        self.assertFalse(Project.from_dict({}).subscribe.enabled)      # projetos antigos
+
+    def test_overlay_only_during_appearance(self):
+        from PySide6.QtGui import QGuiApplication, QImage
+        QGuiApplication.instance() or QGuiApplication([])
+        from wavegen.analysis import ensure_features
+        from wavegen.compositor import Compositor
+        wav = make_tone("sub 20s.wav", 20.0, 440, 0.3)
+        p = Project()
+        p.tracks = [load(wav)]
+        mix = ensure_mix(p.tracks, p.audio)
+        feats = ensure_features(mix, Fraction(30))
+        pcm, _ = open_pcm(mix)
+        off = Compositor(p, 640, 360, feats, pcm)
+        p.subscribe.enabled, p.subscribe.first, p.subscribe.interval = True, 5.0, 8.0
+        on = Compositor(p, 640, 360, feats, pcm)
+        self.assertEqual(on.sub_starts, [5.0, 13.0])
+
+        def arr(c, n):
+            im = c.render(n).convertToFormat(QImage.Format_RGBA8888)
+            return np.frombuffer(im.constBits(), np.uint8).reshape(360, 640, 4).astype(int).copy()
+
+        for sec in (2.0, 11.5, 19.5):                                 # fora das aparições
+            n = int(sec * 30)
+            self.assertEqual(np.abs(arr(on, n) - arr(off, n)).max(), 0, sec)
+        for sec in (8.0, 16.0):                                       # durante
+            n = int(sec * 30)
+            diff = np.abs(arr(on, n) - arr(off, n)).max(axis=2) > 30
+            self.assertGreater(diff.sum(), 800, sec)
+            ys, xs = np.nonzero(diff)
+            self.assertLess(xs.mean(), 320)                            # embaixo, à esquerda
+            self.assertGreater(ys.mean(), 180)
+
+
 if __name__ == "__main__":
     unittest.main()
